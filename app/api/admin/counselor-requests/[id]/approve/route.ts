@@ -5,8 +5,7 @@ import { requireAdmin } from '@/app/api/admin/_auth';
 /**
  * 상담사 신청 승인 API
  * PATCH /api/admin/counselor-requests/[id]/approve
- * 
- * ⚠️ 주의: Prisma 6.2.0 버전 유지 필수
+ * * ⚠️ 주의: Prisma 6.2.0 버전 유지 필수
  */
 
 export const runtime = 'nodejs';
@@ -78,7 +77,8 @@ export async function PATCH(
       });
     });
 
-    console.log(`✅ [상담사 승인] 관리자 ${session.email}: ${profile.user.email} 승인 완료`);
+    // ⭐ 수정된 부분: session.email을 guard.user.email로 변경
+    console.log(`✅ [상담사 승인] 관리자 ${guard.user.email}: ${profile.user.email} 승인 완료`);
 
     return NextResponse.json({
       success: true,
@@ -92,4 +92,3 @@ export async function PATCH(
     );
   }
 }
-
