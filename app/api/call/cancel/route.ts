@@ -1,0 +1,100 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { prisma, ensurePrismaConnected } from '@/lib/prisma';
+
+/**
+ * 통화 취소 API (이용자가 매칭 중 취소)
+ * POST: 통화 상태를 CANCELLED로 변경
+ * 
+ * ⚠️ 주의: Prisma 6.2.0 버전 유지 필수
+ */
+export async function POST(request: NextRequest) {
+  // 캐시 제어 헤더
+  const noCacheHeaders = {
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+  };
+
+  try {
+    const body = await request.json();
+    const { callId } = body;
+
+    // 1. 필수 파라미터 확인
+    if (!callId) {
+      return NextResponse.json(
+        { success: false, message: '통화 ID가 필요합니다.' },
+        { status: 400, headers: noCacheHeaders }
+      );
+    }
+
+    // 2. 세션 확인
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('auth_session');
+
+    if (!sessionCookie) {
+      return NextResponse.json(
+        { success: false, message: '로그인이 필요합니다.' },
+        { status: 401, headers: noCacheHeaders }
+      );
+    }
+
+    let session;
+    try {
+      const cookieValue = sessionCookie.value.trim();
+      session = JSON.parse(cookieValue);
+      if (!session || typeof session !== 'object') {
+        throw new Error('Invalid session structure');
+      }
+    } catch (parseError: any) {
+      cookieStore.delete('auth_session');
+      return NextResponse.json(
+        { success: false, message: '세션 정보를 확인할 수 없습니다. 다시 로그인해주세요.', error: 'INVALID_SESSION_COOKIE' },
+        { status: 401, headers: noCacheHeaders }
+      );
+    }
+
+    console.log(`❌ [통화 취소] ${session.email}이 통화 ${callId} 취소 시도`);
+
+    // 3. DB 연결 확인
+    const dbConnected = await ensurePrismaConnected();
+    if (!dbConnected) {
+      return NextResponse.json(
+        { success: false, message: '데이터베이스 연결에 실패했습니다.' },
+        { status: 503, headers: noCacheHeaders }
+      );
+    }
+
+    // 4. 통화 상태 업데이트
+    try {
+      await prisma.call.update({
+        where: { id: callId },
+        data: {
+          status: 'CANCELLED',
+          endedAt: new Date(),
+        },
+      });
+    } catch (dbError: any) {
+      console.error(`[통화 취소] 업데이트 오류: ${dbError?.message}`);
+      return NextResponse.json(
+        { success: false, message: '통화 취소 처리에 실패했습니다.' },
+        { status: 500, headers: noCacheHeaders }
+      );
+    }
+
+    console.log(`✅ [통화 취소] 통화 ${callId} 취소됨`);
+
+    // 5. 성공 응답
+    return NextResponse.json({
+      success: true,
+      message: '통화가 취소되었습니다.',
+    }, { headers: noCacheHeaders });
+
+  } catch (error: any) {
+    console.error(`[통화 취소] 예상치 못한 오류: ${error?.message}`);
+    return NextResponse.json(
+      { success: false, message: '서버 오류가 발생했습니다.' },
+      { status: 500, headers: noCacheHeaders }
+    );
+  }
+}

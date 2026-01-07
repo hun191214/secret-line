@@ -1,0 +1,50 @@
+/**
+ * Agora SDK 유틸리티
+ * Agora 토큰 생성 및 채널 관리
+ */
+
+import { RtcTokenBuilder, RtcRole } from 'agora-token';
+
+/**
+ * Agora RTC 토큰 생성
+ * @param channelName 채널명
+ * @param uid 사용자 ID
+ * @param role 사용자 역할 (PUBLISHER 또는 SUBSCRIBER)
+ * @returns Agora RTC 토큰
+ */
+export function generateAgoraToken(
+  channelName: string,
+  uid: number | string,
+  role: RtcRole = RtcRole.PUBLISHER
+): string {
+  const appId = process.env.AGORA_APP_ID;
+  const appCertificate = process.env.AGORA_APP_CERTIFICATE;
+
+  if (!appId || !appCertificate) {
+    throw new Error('Agora credentials are not configured');
+  }
+
+  // 토큰 만료 시간: 24시간
+  const expirationTimeInSeconds = Math.floor(Date.now() / 1000) + 3600 * 24;
+
+  // UID를 숫자로 변환 (문자열인 경우)
+  const uidNumber = typeof uid === 'string' ? parseInt(uid, 10) : uid;
+
+  return RtcTokenBuilder.buildTokenWithUid(
+    appId,
+    appCertificate,
+    channelName,
+    uidNumber,
+    role,
+    expirationTimeInSeconds
+  );
+}
+
+/**
+ * 랜덤 채널명 생성
+ * @returns 고유한 채널명
+ */
+export function generateChannelName(): string {
+  return `secret-line-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+}
+

@@ -1,0 +1,216 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { prisma, ensurePrismaConnected } from '@/lib/prisma';
+
+/**
+ * 통화 수락 API
+ * POST: 상담사가 통화를 수락하면 상태를 ACTIVE로 변경
+ * 
+ * ⚠️ 주의: Prisma 6.2.0 버전 유지 필수
+ */
+export async function POST(request: NextRequest) {
+  // 캐시 제어 헤더
+  const noCacheHeaders = {
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+  };
+
+  try {
+    const body = await request.json();
+    const { callId } = body;
+
+    // 1. 필수 파라미터 확인
+    if (!callId) {
+      return NextResponse.json(
+        { success: false, message: '통화 ID가 필요합니다.' },
+        { status: 400, headers: noCacheHeaders }
+      );
+    }
+
+    // 2. 세션 확인
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('auth_session');
+
+    if (!sessionCookie) {
+      return NextResponse.json(
+        { success: false, message: '로그인이 필요합니다.' },
+        { status: 401, headers: noCacheHeaders }
+      );
+    }
+
+    // 3. 세션 파싱
+    let session;
+    try {
+      session = JSON.parse(sessionCookie.value);
+    } catch {
+      return NextResponse.json(
+        { success: false, message: '세션 정보를 확인할 수 없습니다.' },
+        { status: 401, headers: noCacheHeaders }
+      );
+    }
+
+    // 4. 상담사만 수락 가능
+    if (session.role !== 'COUNSELOR') {
+      return NextResponse.json(
+        { success: false, message: '상담사만 통화를 수락할 수 있습니다.' },
+        { status: 403, headers: noCacheHeaders }
+      );
+    }
+
+    const userEmail = session.email;
+    if (!userEmail) {
+      return NextResponse.json(
+        { success: false, message: '세션 정보가 올바르지 않습니다.' },
+        { status: 401, headers: noCacheHeaders }
+      );
+    }
+
+    console.log(`📞 [통화 수락] 상담사 ${userEmail}이 통화 ${callId} 수락 시도`);
+
+    // 5. DB 연결 확인
+    const dbConnected = await ensurePrismaConnected();
+    if (!dbConnected) {
+      return NextResponse.json(
+        { success: false, message: '데이터베이스 연결에 실패했습니다.' },
+        { status: 503, headers: noCacheHeaders }
+      );
+    }
+
+    // 6. 현재 상담사의 사용자 ID 조회
+    let counselor;
+    try {
+      counselor = await prisma.user.findUnique({
+        where: { email: userEmail },
+        select: { id: true, email: true, name: true },
+      });
+    } catch (dbError: any) {
+      console.error(`[통화 수락] 상담사 조회 오류: ${dbError?.message}`);
+      return NextResponse.json(
+        { success: false, message: '상담사 정보 조회에 실패했습니다.' },
+        { status: 500, headers: noCacheHeaders }
+      );
+    }
+
+    if (!counselor) {
+      return NextResponse.json(
+        { success: false, message: '상담사 정보를 찾을 수 없습니다.' },
+        { status: 404, headers: noCacheHeaders }
+      );
+    }
+
+    // 7. 통화 정보 조회 (본인에게 온 통화인지 확인)
+    let call;
+    try {
+      call = await prisma.call.findUnique({
+        where: { id: callId },
+        select: {
+          id: true,
+          counselorId: true,
+          status: true,
+          caller: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            },
+          },
+        },
+      });
+    } catch (dbError: any) {
+      console.error(`[통화 수락] 통화 조회 오류: ${dbError?.message}`);
+      return NextResponse.json(
+        { success: false, message: '통화 정보 조회에 실패했습니다.' },
+        { status: 500, headers: noCacheHeaders }
+      );
+    }
+
+    if (!call) {
+      return NextResponse.json(
+        { success: false, message: '통화를 찾을 수 없습니다.' },
+        { status: 404, headers: noCacheHeaders }
+      );
+    }
+
+    // 8. 본인에게 온 통화인지 확인
+    if (call.counselorId !== counselor.id) {
+      return NextResponse.json(
+        { success: false, message: '본인에게 온 통화만 수락할 수 있습니다.' },
+        { status: 403, headers: noCacheHeaders }
+      );
+    }
+
+    // 9. 이미 수락되었거나 종료된 통화인지 확인
+    if (call.status === 'ACTIVE') {
+      return NextResponse.json(
+        { success: false, message: '이미 진행 중인 통화입니다.' },
+        { status: 400, headers: noCacheHeaders }
+      );
+    }
+
+    if (call.status === 'ENDED' || call.status === 'CANCELLED') {
+      return NextResponse.json(
+        { success: false, message: '이미 종료된 통화입니다.' },
+        { status: 400, headers: noCacheHeaders }
+      );
+    }
+
+    // 10. 통화 상태를 ACTIVE로 변경 및 시작 시간 기록
+    let updatedCall;
+    try {
+      updatedCall = await prisma.call.update({
+        where: { id: callId },
+        data: {
+          status: 'ACTIVE',
+          startedAt: new Date(),
+        },
+        select: {
+          id: true,
+          status: true,
+          startedAt: true,
+          caller: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            },
+          },
+        },
+      });
+    } catch (dbError: any) {
+      console.error(`[통화 수락] 통화 상태 업데이트 오류: ${dbError?.message}`);
+      return NextResponse.json(
+        { success: false, message: '통화 수락 처리에 실패했습니다.' },
+        { status: 500, headers: noCacheHeaders }
+      );
+    }
+
+    console.log(`✅ [통화 수락] 통화 ${callId} 상태가 ACTIVE로 변경됨`);
+    console.log(`   → 상담사: ${userEmail}`);
+    console.log(`   → 이용자: ${updatedCall.caller.email}`);
+    console.log(`   → 시작 시간: ${updatedCall.startedAt}`);
+
+    // 11. 성공 응답
+    return NextResponse.json({
+      success: true,
+      message: '통화가 연결되었습니다.',
+      call: {
+        id: updatedCall.id,
+        status: updatedCall.status,
+        startedAt: updatedCall.startedAt,
+        caller: {
+          id: updatedCall.caller.id,
+          name: updatedCall.caller.name || updatedCall.caller.email?.split('@')[0] || '익명',
+        },
+      },
+    }, { headers: noCacheHeaders });
+
+  } catch (error: any) {
+    console.error(`[통화 수락] 예상치 못한 오류: ${error?.message}`);
+    return NextResponse.json(
+      { success: false, message: '서버 오류가 발생했습니다.' },
+      { status: 500, headers: noCacheHeaders }
+    );
+  }
+}
+

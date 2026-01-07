@@ -1,0 +1,287 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { prisma, ensurePrismaConnected } from '@/lib/prisma';
+
+/**
+ * 통화 거절 API (릴레이 매칭 연동)
+ * POST: 상담사가 통화를 거절하면 다음 상담사로 자동 전환
+ * 
+ * ⚠️ 주의: Prisma 6.2.0 버전 유지 필수
+ */
+
+// 온라인 상태인 상담사 목록 조회
+async function getOnlineCounselors() {
+  try {
+    await prisma.$connect();
+  } catch {
+    // 연결 실패해도 계속 진행
+  }
+
+  const isConnected = await ensurePrismaConnected();
+  
+  if (!isConnected) {
+    return [];
+  }
+
+  try {
+    const onlineCounselors = await prisma.user.findMany({
+      where: {
+        role: 'COUNSELOR',
+        status: 'ONLINE',
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+    });
+
+    return onlineCounselors.map((c) => ({
+      id: c.id,
+      name: c.name || c.email?.split('@')[0] || '상담사',
+      email: c.email || '',
+    }));
+  } catch (error: any) {
+    console.error('❌ [거절] 상담사 조회 오류:', error?.message);
+    return [];
+  }
+}
+
+export async function POST(request: NextRequest) {
+  // 캐시 제어 헤더
+  const noCacheHeaders = {
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+  };
+
+  try {
+    const body = await request.json();
+    const { callId, counselorIndex } = body; // counselorIndex 추가
+
+    // 1. 필수 파라미터 확인
+    if (!callId) {
+      return NextResponse.json(
+        { success: false, message: '통화 ID가 필요합니다.' },
+        { status: 400, headers: noCacheHeaders }
+      );
+    }
+
+    // 2. 세션 확인
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('auth_session');
+
+    if (!sessionCookie) {
+      return NextResponse.json(
+        { success: false, message: '로그인이 필요합니다.' },
+        { status: 401, headers: noCacheHeaders }
+      );
+    }
+
+    // 3. 세션 파싱
+    let session;
+    try {
+      session = JSON.parse(sessionCookie.value);
+    } catch {
+      return NextResponse.json(
+        { success: false, message: '세션 정보를 확인할 수 없습니다.' },
+        { status: 401, headers: noCacheHeaders }
+      );
+    }
+
+    // 4. 상담사만 거절 가능
+    if (session.role !== 'COUNSELOR') {
+      return NextResponse.json(
+        { success: false, message: '상담사만 통화를 거절할 수 있습니다.' },
+        { status: 403, headers: noCacheHeaders }
+      );
+    }
+
+    const userEmail = session.email;
+    if (!userEmail) {
+      return NextResponse.json(
+        { success: false, message: '세션 정보가 올바르지 않습니다.' },
+        { status: 401, headers: noCacheHeaders }
+      );
+    }
+
+    console.log(`📞 [통화 거절] 상담사 ${userEmail}이 통화 ${callId} 거절 시도`);
+
+    // 5. DB 연결 확인
+    const dbConnected = await ensurePrismaConnected();
+    if (!dbConnected) {
+      return NextResponse.json(
+        { success: false, message: '데이터베이스 연결에 실패했습니다.' },
+        { status: 503, headers: noCacheHeaders }
+      );
+    }
+
+    // 6. 현재 상담사의 사용자 ID 조회
+    let counselor;
+    try {
+      counselor = await prisma.user.findUnique({
+        where: { email: userEmail },
+        select: { id: true },
+      });
+    } catch (dbError: any) {
+      console.error(`[통화 거절] 상담사 조회 오류: ${dbError?.message}`);
+      return NextResponse.json(
+        { success: false, message: '상담사 정보 조회에 실패했습니다.' },
+        { status: 500, headers: noCacheHeaders }
+      );
+    }
+
+    if (!counselor) {
+      return NextResponse.json(
+        { success: false, message: '상담사 정보를 찾을 수 없습니다.' },
+        { status: 404, headers: noCacheHeaders }
+      );
+    }
+
+    // 7. 통화 정보 조회
+    let call;
+    try {
+      call = await prisma.call.findUnique({
+        where: { id: callId },
+        select: {
+          id: true,
+          counselorId: true,
+          status: true,
+        },
+      });
+    } catch (dbError: any) {
+      console.error(`[통화 거절] 통화 조회 오류: ${dbError?.message}`);
+      return NextResponse.json(
+        { success: false, message: '통화 정보 조회에 실패했습니다.' },
+        { status: 500, headers: noCacheHeaders }
+      );
+    }
+
+    if (!call) {
+      return NextResponse.json(
+        { success: false, message: '통화를 찾을 수 없습니다.' },
+        { status: 404, headers: noCacheHeaders }
+      );
+    }
+
+    // 8. 본인에게 온 통화인지 확인
+    if (call.counselorId !== counselor.id) {
+      return NextResponse.json(
+        { success: false, message: '본인에게 온 통화만 거절할 수 있습니다.' },
+        { status: 403, headers: noCacheHeaders }
+      );
+    }
+
+    // 9. 온라인 상담사 목록 조회 (릴레이 매칭용)
+    const onlineCounselors = await getOnlineCounselors();
+
+    if (onlineCounselors.length === 0) {
+      // 온라인 상담사가 없으면 통화 취소
+      try {
+        await prisma.call.update({
+          where: { id: callId },
+          data: {
+            status: 'CANCELLED',
+            endedAt: new Date(),
+          },
+        });
+        console.log(`❌ [통화 거절] 온라인 상담사 없음 - 통화 취소: ${callId}`);
+      } catch (dbError: any) {
+        console.error(`[통화 거절] 통화 상태 업데이트 오류: ${dbError?.message}`);
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: '연결 가능한 상담사가 없습니다.',
+        relayed: false,
+        cancelled: true,
+      }, { headers: noCacheHeaders });
+    }
+
+    // 10. 현재 상담사 인덱스 계산
+    const currentCounselorIndex = counselorIndex !== undefined 
+      ? parseInt(String(counselorIndex)) 
+      : onlineCounselors.findIndex((c) => c.id === call.counselorId);
+
+    // 11. 다음 상담사 인덱스 계산 (무한 루프)
+    const nextIndex = (currentCounselorIndex + 1) % onlineCounselors.length;
+    const nextCounselor = onlineCounselors[nextIndex];
+
+    // 12. 마지막 상담사인지 확인 (모든 상담사를 거부한 경우)
+    // 현재 상담사를 제외한 나머지 상담사 수 확인
+    const remainingCounselors = onlineCounselors.length - 1;
+    const isLastCounselor = remainingCounselors === 0 || 
+                           (onlineCounselors.length > 0 && nextIndex === currentCounselorIndex);
+
+    if (isLastCounselor && onlineCounselors.length <= 1) {
+      // 마지막 상담사까지 거절했거나 상담사가 1명뿐일 때만 통화 취소
+      try {
+        await prisma.call.update({
+          where: { id: callId },
+          data: {
+            status: 'CANCELLED',
+            endedAt: new Date(),
+          },
+        });
+        console.log(`❌ [통화 거절] 마지막 상담사 거절 - 통화 취소: ${callId}`);
+      } catch (dbError: any) {
+        console.error(`[통화 거절] 통화 상태 업데이트 오류: ${dbError?.message}`);
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: '연결 가능한 상담사가 없습니다.',
+        relayed: false,
+        cancelled: true,
+      }, { headers: noCacheHeaders });
+    }
+
+    // 13. 다음 상담사로 전환 (릴레이 매칭)
+    try {
+      await prisma.call.update({
+        where: { id: callId },
+        data: {
+          counselorId: nextCounselor.id,
+          status: 'CONNECTING', // CONNECTING 상태 유지 (통화 계속 진행)
+          updatedAt: new Date(),
+        },
+      });
+
+      console.log(`🔄 [통화 거절] 릴레이 매칭: ${currentCounselorIndex + 1}번 → ${nextIndex + 1}번 상담사 (${nextCounselor.name || nextCounselor.email})`);
+
+      return NextResponse.json({
+        success: true,
+        message: '다음 상담사로 연결 중입니다...',
+        relayed: true,
+        cancelled: false,
+        call: {
+          id: callId,
+          status: 'CONNECTING',
+        },
+        nextCounselor: {
+          id: nextCounselor.id,
+          name: nextCounselor.name || nextCounselor.email,
+        },
+        currentCounselorIndex: nextIndex,
+        totalCounselors: onlineCounselors.length,
+      }, { headers: noCacheHeaders });
+
+    } catch (dbError: any) {
+      console.error(`[통화 거절] 통화 상태 업데이트 오류: ${dbError?.message}`);
+      return NextResponse.json(
+        { success: false, message: '다음 상담사로 전환에 실패했습니다.' },
+        { status: 500, headers: noCacheHeaders }
+      );
+    }
+
+  } catch (error: any) {
+    console.error(`[통화 거절] 예상치 못한 오류: ${error?.message}`);
+    return NextResponse.json(
+      { success: false, message: '서버 오류가 발생했습니다.' },
+      { status: 500, headers: noCacheHeaders }
+    );
+  }
+}

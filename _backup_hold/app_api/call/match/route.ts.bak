@@ -1,0 +1,277 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { prisma, ensurePrismaConnected } from '@/lib/prisma';
+
+/**
+ * 통화 매칭 API
+ * POST: 통화 시작 및 상담사 매칭 시작
+ * GET: 현재 매칭 상태 조회
+ */
+
+// 세션에서 사용자 정보 가져오기
+async function getSessionUser() {
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get('auth_session');
+  
+  if (!sessionCookie) {
+    return null;
+  }
+  
+  try {
+    const session = JSON.parse(sessionCookie.value);
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+// 온라인 상태인 상담사 목록 조회
+async function getOnlineCounselors() {
+  try {
+    await prisma.$connect();
+  } catch {
+    // 연결 실패해도 계속 진행
+  }
+
+  const isConnected = await ensurePrismaConnected();
+  
+  if (!isConnected) {
+    console.log('⚠️ [매칭] DB 연결 실패 - Mock 데이터 반환');
+    // Mock 데이터 반환 (온라인 상태인 상담사)
+    return [
+      { id: 'mock-1', name: '지아', email: 'counselor1@example.com' },
+      { id: 'mock-2', name: '서연', email: 'counselor2@example.com' },
+    ];
+  }
+
+  try {
+    // DB에서 ONLINE 상태인 상담사만 조회 (엄격한 필터링)
+    const onlineCounselors = await prisma.user.findMany({
+      where: {
+        role: 'COUNSELOR',
+        status: 'ONLINE', // ONLINE 상태인 상담사만 조회
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        updatedAt: true, // 마지막 업데이트 시간 확인용
+      },
+      orderBy: {
+        updatedAt: 'desc', // 최근 업데이트된 순으로 정렬
+      },
+    });
+
+    console.log(`🔔 [매칭] ONLINE 상태인 상담사 수: ${onlineCounselors.length}`);
+    onlineCounselors.forEach((c) => {
+      console.log(`  - ${c.email} (${c.name || '이름 없음'}) - Status: ONLINE`);
+    });
+
+    // ONLINE 상태인 상담사가 없으면 빈 배열 반환
+    if (onlineCounselors.length === 0) {
+      console.log('⚠️ [매칭] ONLINE 상태인 상담사가 0명입니다.');
+      return [];
+    }
+
+    // 200@gmail.com 상담사가 있으면 맨 앞으로 이동
+    const formattedCounselors = onlineCounselors.map((c) => ({
+      id: c.id,
+      name: c.name || c.email?.split('@')[0] || '상담사',
+      email: c.email || '',
+    }));
+
+    const targetCounselor = formattedCounselors.find((c) => c.email === '200@gmail.com');
+    if (targetCounselor && formattedCounselors.length > 1) {
+      const filtered = formattedCounselors.filter((c) => c.email !== '200@gmail.com');
+      formattedCounselors.length = 0;
+      formattedCounselors.push(targetCounselor, ...filtered);
+      console.log(`🔔 [매칭] 200@gmail.com 상담사를 목록 맨 앞으로 이동`);
+    }
+
+    console.log(`✅ [매칭] 최종 ONLINE 상담사 수: ${formattedCounselors.length}`);
+    return formattedCounselors;
+  } catch (error: any) {
+    console.error('❌ [매칭] 상담사 조회 오류:', error?.message);
+    // 에러 발생 시 빈 배열 반환 (Mock 데이터 제거)
+    return [];
+  }
+}
+
+// 통화 시작 (POST)
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getSessionUser();
+    
+    if (!session || !session.userId) {
+      return NextResponse.json(
+        { success: false, message: '로그인이 필요합니다.' },
+        { status: 401 }
+      );
+    }
+
+    // 이용자(MEMBER)만 통화 가능
+    if (session.role !== 'MEMBER') {
+      return NextResponse.json(
+        { success: false, message: '이용자만 통화를 시작할 수 있습니다.' },
+        { status: 403 }
+      );
+    }
+
+    // 온라인 상담사 목록 조회
+    const onlineCounselors = await getOnlineCounselors();
+
+    if (onlineCounselors.length === 0) {
+      console.log('⚠️ [매칭] 온라인 상담사 0명 - 통화 차단');
+      return NextResponse.json(
+        { success: false, message: '상담사가 현재 오프라인 상태입니다. 잠시 후 다시 시도해주세요.' },
+        { status: 404 }
+      );
+    }
+
+    // 통화 기록 생성 (첫 번째 상담사에게 먼저 호출)
+    const firstCounselor = onlineCounselors[0];
+
+    try {
+      await prisma.$connect();
+    } catch {
+      // 연결 실패해도 계속 진행
+    }
+
+    const isConnected = await ensurePrismaConnected();
+    
+    let callRecord;
+    if (isConnected) {
+      try {
+        callRecord = await prisma.call.create({
+          data: {
+            callerId: session.userId,
+            counselorId: firstCounselor.id,
+            status: 'CONNECTING',
+            startedAt: new Date(),
+          },
+          select: {
+            id: true,
+            status: true,
+            startedAt: true,
+          },
+        });
+      } catch (dbError: any) {
+        console.error('통화 기록 생성 오류:', dbError?.message);
+        // DB 저장 실패해도 계속 진행 (Mock 모드)
+        callRecord = {
+          id: `call_${Date.now()}`,
+          status: 'CONNECTING',
+          startedAt: new Date(),
+        };
+      }
+    } else {
+      // Mock 모드
+      callRecord = {
+        id: `call_${Date.now()}`,
+        status: 'CONNECTING',
+        startedAt: new Date(),
+      };
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: '통화 매칭이 시작되었습니다.',
+      call: {
+        id: callRecord.id,
+        status: callRecord.status,
+        startedAt: callRecord.startedAt,
+      },
+      counselors: onlineCounselors.map((c: any) => ({
+        id: c.id,
+        name: c.name || c.email,
+      })),
+      currentCounselorIndex: 0,
+    });
+  } catch (error: any) {
+    console.error('통화 매칭 오류:', error?.message);
+    return NextResponse.json(
+      { success: false, message: '통화 매칭 중 오류가 발생했습니다.' },
+      { status: 500 }
+    );
+  }
+}
+
+// 통화 상태 조회 (GET)
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getSessionUser();
+    
+    if (!session || !session.userId) {
+      return NextResponse.json(
+        { success: false, message: '로그인이 필요합니다.' },
+        { status: 401 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const callId = searchParams.get('callId');
+    const counselorIndex = parseInt(searchParams.get('counselorIndex') || '0');
+
+    if (!callId) {
+      return NextResponse.json(
+        { success: false, message: '통화 ID가 필요합니다.' },
+        { status: 400 }
+      );
+    }
+
+    // 온라인 상담사 목록 조회
+    const onlineCounselors = await getOnlineCounselors();
+
+    if (onlineCounselors.length === 0) {
+      console.log('⚠️ [매칭 GET] 온라인 상담사 0명');
+      return NextResponse.json(
+        { success: false, message: '상담사가 현재 오프라인 상태입니다.' },
+        { status: 404 }
+      );
+    }
+
+    // 다음 상담사 인덱스 계산 (무한 루프)
+    const nextIndex = (counselorIndex + 1) % onlineCounselors.length;
+    const nextCounselor = onlineCounselors[nextIndex];
+
+    // 통화 기록 업데이트 (다음 상담사로 변경)
+    const isConnected = await ensurePrismaConnected();
+    
+    if (isConnected) {
+      try {
+        await prisma.call.update({
+          where: { id: callId },
+          data: {
+            counselorId: nextCounselor.id,
+            status: 'CONNECTING',
+            updatedAt: new Date(),
+          },
+        });
+      } catch (dbError: any) {
+        console.error('통화 기록 업데이트 오류:', dbError?.message);
+        // 업데이트 실패해도 계속 진행
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      call: {
+        id: callId,
+        status: 'CONNECTING',
+      },
+      currentCounselor: {
+        id: nextCounselor.id,
+        name: nextCounselor.name || nextCounselor.email,
+      },
+      currentCounselorIndex: nextIndex,
+      totalCounselors: onlineCounselors.length,
+    });
+  } catch (error: any) {
+    console.error('통화 상태 조회 오류:', error?.message);
+    return NextResponse.json(
+      { success: false, message: '통화 상태 조회 중 오류가 발생했습니다.' },
+      { status: 500 }
+    );
+  }
+}
+

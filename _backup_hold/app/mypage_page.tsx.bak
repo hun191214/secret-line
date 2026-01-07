@@ -1,0 +1,400 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import CallOverlay from '../components/CallOverlay';
+
+interface User {
+  email: string;
+  role: string;
+  userId?: string;
+  coins?: number;
+}
+
+interface CallData {
+  callId: string;
+  counselors: Array<{ id: string; name: string }>;
+}
+
+export default function MyPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // 통화 관련 상태
+  const [isCalling, setIsCalling] = useState(false);
+  const [callData, setCallData] = useState<CallData | null>(null);
+  const [isStartingCall, setIsStartingCall] = useState(false);
+
+  useEffect(() => {
+    // 세션 및 잔액 확인
+    Promise.all([
+      fetch('/api/auth/session').then((res) => res.json()),
+      fetch('/api/charge/balance').then((res) => res.json()),
+    ])
+      .then(([sessionData, balanceData]) => {
+        if (sessionData.authenticated && sessionData.user) {
+          setUser({
+            ...sessionData.user,
+            coins: balanceData.coins || 0,
+          });
+
+          // 상담사인 경우 자동 오프라인 전환
+          if (sessionData.user.role === 'COUNSELOR') {
+            console.log('📴 [마이페이지] 상담사 자동 오프라인 전환');
+            fetch('/api/counselor/status', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ status: 'offline' }),
+            }).catch((err) => {
+              console.error('오프라인 전환 실패:', err);
+            });
+          }
+        } else {
+          router.push('/');
+        }
+        setIsLoading(false);
+      })
+      .catch(() => {
+        setIsLoading(false);
+        router.push('/');
+      });
+  }, [router]);
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.push('/');
+      router.refresh();
+    } catch (error) {
+      console.error('Logout failed:', error);
+      setIsLoggingOut(false);
+    }
+  };
+
+  // 상담 시작하기 (메인 페이지와 동일한 로직)
+  const handleStartCall = async () => {
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    // 상담사는 통화 시작 불가
+    if (user.role === 'COUNSELOR') {
+      alert('상담사는 통화를 시작할 수 없습니다. 대시보드에서 통화를 기다려주세요.');
+      return;
+    }
+
+    setIsStartingCall(true);
+
+    try {
+      // DB에서 실시간 코인 잔액 조회
+      const coinsResponse = await fetch('/api/user/coins', {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-store',
+          'Pragma': 'no-cache',
+        },
+        credentials: 'include',
+      });
+
+      if (coinsResponse.status === 401) {
+        alert('인증 정보가 만료되었습니다. 다시 로그인해주세요.');
+        router.push('/login');
+        return;
+      }
+
+      const coinsData = await coinsResponse.json();
+      const userCoins = coinsData.success ? coinsData.coins : 0;
+
+      // 최소 코인 체크 (14 코인 이상 필요 - 1분 통화료)
+      if (userCoins < 14) {
+        alert(`코인 잔액이 부족합니다. (현재: ${userCoins} 코인, 필요: 14 코인 이상)`);
+        router.push('/charge');
+        return;
+      }
+
+      // 통화 매칭 시작
+      const response = await fetch('/api/call/match', {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setCallData({
+          callId: data.call.id,
+          counselors: data.counselors,
+        });
+        setIsCalling(true);
+      } else {
+        alert(data.message || '통화 시작에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('통화 시작 오류:', error);
+      alert('통화 시작 중 오류가 발생했습니다.');
+    } finally {
+      setIsStartingCall(false);
+    }
+  };
+
+  const handleCallCancel = () => {
+    setIsCalling(false);
+    setCallData(null);
+    // 통화 종료 후 잔액 새로고침
+    fetch('/api/charge/balance')
+      .then((res) => res.json())
+      .then((balanceData) => {
+        if (user) {
+          setUser({
+            ...user,
+            coins: balanceData.coins || 0,
+          });
+        }
+      });
+  };
+
+  // 역할 한글 변환
+  const getRoleDisplayName = (role: string) => {
+    switch (role) {
+      case 'MEMBER':
+        return '이용자 (남성)';
+      case 'COUNSELOR':
+        return '상담사 (여성)';
+      case 'ADMIN':
+        return '관리자';
+      default:
+        return role;
+    }
+  };
+
+  // 역할 이모지
+  const getRoleEmoji = (role: string) => {
+    switch (role) {
+      case 'MEMBER':
+        return '👤';
+      case 'COUNSELOR':
+        return '👩‍⚕️';
+      case 'ADMIN':
+        return '👑';
+      default:
+        return '👤';
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block w-8 h-8 border-4 border-[#D4AF37] border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-gray-400">로딩 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null; // 리다이렉트 중
+  }
+
+  return (
+    <div className="min-h-screen bg-black">
+      {/* 통화 오버레이 */}
+      {isCalling && callData && (
+        <CallOverlay
+          callId={callData.callId}
+          counselors={callData.counselors}
+          onCancel={handleCallCancel}
+        />
+      )}
+
+      {/* 헤더 */}
+      <header className="container mx-auto px-4 py-6 border-b border-[#D4AF37]/20">
+        <div className="flex items-center justify-between">
+          <a href="/" className="text-2xl font-bold" style={{ color: '#D4AF37' }}>
+            Secret Line
+          </a>
+          <nav className="flex gap-4 items-center">
+            <a
+              href="/"
+              className="text-white/80 hover:text-white transition-colors text-sm"
+            >
+              메인으로
+            </a>
+          </nav>
+        </div>
+      </header>
+
+      {/* 메인 콘텐츠 */}
+      <main className="container mx-auto px-4 py-12 max-w-2xl">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-2" style={{ color: '#D4AF37' }}>
+            내 정보
+          </h1>
+          <p className="text-gray-400">프리미엄 멤버십 카드</p>
+        </div>
+
+        {/* 멤버십 카드 */}
+        <div
+          className="bg-gradient-to-br from-gray-900 to-black rounded-3xl p-8 mb-8 shadow-2xl border-2"
+          style={{ borderColor: '#D4AF37' }}
+        >
+          {/* 카드 상단 디자인 */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="text-5xl">{getRoleEmoji(user.role)}</div>
+            <div className="text-right">
+              <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
+                Secret Line
+              </div>
+              <div className="text-sm font-semibold" style={{ color: '#D4AF37' }}>
+                Premium Member
+              </div>
+            </div>
+          </div>
+
+          {/* 사용자 정보 */}
+          <div className="space-y-6">
+            {/* 닉네임/이메일 */}
+            <div>
+              <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">
+                이메일
+              </div>
+              <div className="text-xl font-semibold text-white">
+                {user.email || '익명 사용자'}
+              </div>
+            </div>
+
+            {/* 역할 */}
+            <div>
+              <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">
+                내 역할
+              </div>
+              <div
+                className="inline-block px-4 py-2 rounded-lg font-semibold text-lg"
+                style={{
+                  backgroundColor: '#D4AF37',
+                  color: '#000000',
+                }}
+              >
+                {getRoleEmoji(user.role)} {getRoleDisplayName(user.role)}
+              </div>
+            </div>
+
+            {/* 코인 잔액 */}
+            <div className="pt-4 border-t border-[#D4AF37]/30">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  {/* 역할에 따른 명칭 분리 */}
+                  <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">
+                    {user.role === 'COUNSELOR' ? '누적 정산금' : '코인 잔액'}
+                  </div>
+                  <div className="text-3xl font-bold text-white">
+                    {user.coins?.toLocaleString() || 0}{' '}
+                    <span className="text-xl" style={{ color: '#D4AF37' }}>
+                      Coins
+                    </span>
+                  </div>
+                  {/* USDT 환산 값 표기 (100코인 = 1 USDT) - 모든 역할에 표시 */}
+                  <div className="text-sm text-gray-400 mt-1">
+                    (약 {(((user.coins ?? 0) as number) / 100).toFixed(2)} USDT)
+                  </div>
+                </div>
+                <div className="text-4xl">💰</div>
+              </div>
+
+              {/* 이용자 전용: 상담 시작하기 버튼 */}
+              {user.role === 'MEMBER' && (
+                <button
+                  onClick={handleStartCall}
+                  disabled={isStartingCall}
+                  className="block w-full py-4 px-4 rounded-lg font-bold text-black text-lg text-center transition-all transform hover:scale-[1.02] mb-3 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                  style={{
+                    background: 'linear-gradient(to right, #ec4899, #f43f5e)',
+                    boxShadow: '0 0 20px rgba(236, 72, 153, 0.5)',
+                  }}
+                >
+                  {isStartingCall ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="inline-block w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></span>
+                      연결 중...
+                    </span>
+                  ) : (
+                    <>📞 상담 시작하기</>
+                  )}
+                </button>
+              )}
+
+              {/* 이용자 전용: 충전하기 버튼 */}
+              {user.role === 'MEMBER' && (
+                <a
+                  href="/charge"
+                  className="block w-full py-3 px-4 rounded-lg font-semibold text-black text-center transition-all transform hover:scale-[1.02] mb-3"
+                  style={{ backgroundColor: '#D4AF37' }}
+                >
+                  충전하기
+                </a>
+              )}
+
+              {/* 상담사 전용: 출금 신청 (정산) 버튼 */}
+              {user.role === 'COUNSELOR' && (
+                <button
+                  type="button"
+                  className="block w-full py-3 px-4 rounded-lg font-semibold text-black text-center transition-all transform hover:scale-[1.02] mb-3"
+                  style={{ backgroundColor: '#D4AF37' }}
+                  onClick={() => alert('출금 신청 기능은 준비 중입니다.')}
+                >
+                  출금 신청 (정산)
+                </button>
+              )}
+              {/* 상담사 전용 버튼 */}
+              {user.role === 'COUNSELOR' && (
+                <a
+                  href="/counselor/dashboard"
+                  className="block w-full py-4 px-4 rounded-lg font-bold text-black text-lg text-center transition-all transform hover:scale-[1.02]"
+                  style={{
+                    background: 'linear-gradient(to right, #ec4899, #f43f5e)',
+                    boxShadow: '0 0 20px rgba(236, 72, 153, 0.5)',
+                  }}
+                >
+                  📞 업무 시작하기 (대시보드)
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 로그아웃 버튼 */}
+        <div className="text-center">
+          <button
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="px-8 py-3 rounded-lg font-semibold text-black transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+            style={{
+              backgroundColor: isLoggingOut ? '#B8941F' : '#D4AF37',
+            }}
+          >
+            {isLoggingOut ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="inline-block w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></span>
+                로그아웃 중...
+              </span>
+            ) : (
+              '로그아웃'
+            )}
+          </button>
+        </div>
+
+        {/* 하단 안내 */}
+        <div className="mt-8 text-center">
+          <p className="text-gray-500 text-xs">
+            개인정보는 암호화되어 안전하게 보관됩니다
+          </p>
+        </div>
+      </main>
+    </div>
+  );
+}

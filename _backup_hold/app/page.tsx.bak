@@ -1,0 +1,327 @@
+'use client';
+
+import { useState } from 'react';
+import Header from './components/Header';
+import CallOverlay from './components/CallOverlay';
+
+export default function Home() {
+  const [isCalling, setIsCalling] = useState(false);
+  const [callData, setCallData] = useState<{
+    callId: string;
+    counselors: Array<{ id: string; name: string }>;
+  } | null>(null);
+
+  const handleStartCall = async () => {
+    console.log('🔔 [디버깅] handleStartCall 함수 호출됨');
+    
+    try {
+      // 1. 세션 확인 (캐시 제어 및 세션 쿠키 전달 강제)
+      console.log('🔔 [디버깅] 세션 확인 중...');
+      const balanceResponse = await fetch('/api/auth/session', {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-store',
+          'Pragma': 'no-cache',
+        },
+        credentials: 'include', // 세션 쿠키 확실히 전달
+      });
+
+      // 401 에러 처리
+      if (balanceResponse.status === 401) {
+        alert('인증 정보가 만료되었습니다. 다시 로그인해주세요.');
+        window.location.href = '/login';
+        return;
+      }
+
+      const balanceData = await balanceResponse.json();
+      
+      if (!balanceData.authenticated) {
+        alert('로그인이 필요합니다.');
+        window.location.href = '/login';
+        return;
+      }
+
+      // DB에서 실시간 코인 잔액 조회 (세션에 의존하지 않고 최신 값 조회)
+      // 캐시 제어 및 세션 쿠키 전달 강제
+      const coinsResponse = await fetch('/api/user/coins', {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-store',
+          'Pragma': 'no-cache',
+        },
+        credentials: 'include', // 세션 쿠키 확실히 전달
+      });
+
+      // 401 에러 처리
+      if (coinsResponse.status === 401) {
+        alert('인증 정보가 만료되었습니다. 다시 로그인해주세요.');
+        window.location.href = '/login';
+        return;
+      }
+
+      const coinsData = await coinsResponse.json();
+      
+      if (!coinsData.success) {
+        alert(coinsData.message || '코인 잔액 조회에 실패했습니다.');
+        return;
+      }
+      
+      const userCoins = coinsData.coins || 0;
+      console.log(`🔔 [디버깅] DB에서 조회한 실시간 코인 잔액: ${userCoins} 코인`);
+
+      // 최소 코인 체크 (14 코인 이상 필요 - 1분 통화료)
+      if (userCoins < 14) {
+        alert(`코인 잔액이 부족합니다. (현재: ${userCoins} 코인, 필요: 14 코인 이상)`);
+        return;
+      }
+
+      // 2. 통화 매칭 시작 (캐시 제어 및 세션 쿠키 전달 강제)
+      console.log('🔔 [디버깅] 통화 매칭 API 호출 중...');
+      const response = await fetch('/api/call/match', {
+        method: 'POST',
+        headers: {
+          'Cache-Control': 'no-store',
+          'Pragma': 'no-cache',
+        },
+        credentials: 'include', // 세션 쿠키 확실히 전달
+      });
+
+      // 401 에러 처리
+      if (response.status === 401) {
+        alert('인증 정보가 만료되었습니다. 다시 로그인해주세요.');
+        window.location.href = '/login';
+        return;
+      }
+
+      const data = await response.json();
+      console.log('🔔 [디버깅] 통화 매칭 API 응답:', data);
+
+      if (data.success) {
+        console.log('🔔 [디버깅] CallOverlay 표시 중...');
+        setCallData({
+          callId: data.call.id,
+          counselors: data.counselors,
+        });
+        setIsCalling(true);
+      } else {
+        console.error('🔔 [디버깅] 통화 매칭 실패:', data.message);
+        alert(data.message || '통화 시작에 실패했습니다.');
+      }
+    } catch (error: any) {
+      console.error('❌ [통화 시작] 예상치 못한 오류:', error?.message || error);
+      
+      // 에러 타입에 따른 구분 처리
+      if (error?.message?.includes('401') || error?.message?.includes('Unauthorized')) {
+        alert('인증 정보가 만료되었습니다. 다시 로그인해주세요.');
+        window.location.href = '/login';
+      } else if (error?.message?.includes('503') || error?.message?.includes('Service Unavailable')) {
+        alert('서버 연결 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+      } else {
+        alert('통화 시작 중 오류가 발생했습니다.');
+      }
+    }
+  };
+
+  const handleCancelCall = () => {
+    setIsCalling(false);
+    setCallData(null);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
+      {/* 헤더 */}
+      <Header />
+
+      {/* 메인 히어로 섹션 */}
+      <main className="container mx-auto px-4 py-16">
+        <div className="max-w-4xl mx-auto text-center">
+          {/* 메인 타이틀 */}
+          <h2 className="text-5xl md:text-6xl font-bold text-white mb-6 leading-tight">
+            비밀 보장 익명 음성 상담
+          </h2>
+          <p className="text-xl md:text-2xl text-white/90 mb-8 leading-relaxed">
+            완전한 익명성으로 안전하게 연결되는 음성 상담 서비스
+          </p>
+
+          {/* 주요 특징 */}
+          <div className="grid md:grid-cols-3 gap-6 mb-12">
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
+              <div className="text-4xl mb-4">🔒</div>
+              <h3 className="text-xl font-semibold text-white mb-2">완전한 익명성</h3>
+              <p className="text-white/80">
+                개인정보는 절대 공개되지 않습니다. 비밀 보장을 최우선으로 합니다.
+              </p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
+              <div className="text-4xl mb-4">💬</div>
+              <h3 className="text-xl font-semibold text-white mb-2">실시간 음성 연결</h3>
+              <p className="text-white/80">
+                고품질 음성 통화로 자연스러운 상담 경험을 제공합니다.
+              </p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
+              <div className="text-4xl mb-4">⚡</div>
+              <h3 className="text-xl font-semibold text-white mb-2">즉시 연결</h3>
+              <p className="text-white/80">
+                빠르고 간편한 연결 프로세스로 언제든지 상담을 시작할 수 있습니다.
+              </p>
+            </div>
+          </div>
+
+          {/* 통화료 정보 */}
+          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-12 border border-white/20 max-w-2xl mx-auto">
+            <div className="flex items-center justify-center gap-4 mb-4">
+              <div className="text-3xl">💰</div>
+              <h3 className="text-2xl font-semibold text-white">투명한 통화료</h3>
+            </div>
+            <p className="text-white/90 text-lg mb-2">
+              분당 <span className="font-bold text-white">$0.14</span> 고정 과금
+            </p>
+            <p className="text-white/70 text-sm">
+              사용한 시간만큼만 과금되며, 숨겨진 비용은 없습니다.
+            </p>
+          </div>
+
+          {/* CTA 버튼 */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
+            <button
+              onClick={handleStartCall}
+              className="px-8 py-4 bg-gradient-to-r from-pink-500 to-rose-500 text-white text-lg font-semibold rounded-full hover:from-pink-600 hover:to-rose-600 transition-all transform hover:scale-105 shadow-lg hover:shadow-xl"
+            >
+              상담 시작하기
+            </button>
+            <button className="px-8 py-4 bg-white/10 backdrop-blur-sm text-white text-lg font-semibold rounded-full hover:bg-white/20 transition-all border border-white/20">
+              더 알아보기
+            </button>
+          </div>
+
+          {/* 현재 상담 가능한 전문가 */}
+          <div className="mb-16">
+            <h3 className="text-3xl font-bold text-white mb-8">
+              현재 상담 가능한 전문가
+            </h3>
+            <div className="grid md:grid-cols-3 gap-6">
+              {/* 상담사 1: 지아 (여성) */}
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 hover:bg-white/15 transition-all">
+                <div className="text-5xl mb-4">👩‍⚕️</div>
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <h4 className="text-xl font-semibold text-white">지아</h4>
+                  <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                </div>
+                <p className="text-pink-300 font-medium mb-3">익명 상담 전문가</p>
+                <p className="text-white/70 text-sm mb-4">
+                  여성 상담사의 세심한 공감과 비밀 보장. 익명 상담으로 안심하세요.
+                </p>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-white/60">⭐ 4.9 (1,247회)</span>
+                  <span className="text-white font-bold">분당 $0.14</span>
+                </div>
+                <button
+                  onClick={handleStartCall}
+                  className="w-full mt-4 py-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-lg hover:from-pink-600 hover:to-rose-600 transition-all"
+                >
+                  상담 연결하기
+                </button>
+              </div>
+
+              {/* 상담사 2: 서연 (여성) */}
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 hover:bg-white/15 transition-all">
+                <div className="text-5xl mb-4">👩‍⚕️</div>
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <h4 className="text-xl font-semibold text-white">서연</h4>
+                  <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                </div>
+                <p className="text-pink-300 font-medium mb-3">비밀 보장 상담</p>
+                <p className="text-white/70 text-sm mb-4">
+                  전문 여성 상담사가 비밀 보장으로 편안하게 상담해드립니다. 분당 $0.14
+                </p>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-white/60">⭐ 4.8 (892회)</span>
+                  <span className="text-white font-bold">분당 $0.14</span>
+                </div>
+                <button
+                  onClick={handleStartCall}
+                  className="w-full mt-4 py-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-lg hover:from-pink-600 hover:to-rose-600 transition-all"
+                >
+                  상담 연결하기
+                </button>
+              </div>
+
+              {/* 상담사 3: 민서 (여성) */}
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 hover:bg-white/15 transition-all">
+                <div className="text-5xl mb-4">👩‍💼</div>
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <h4 className="text-xl font-semibold text-white">민서</h4>
+                  <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
+                </div>
+                <p className="text-pink-300 font-medium mb-3">심리 상담 전문가</p>
+                <p className="text-white/70 text-sm mb-4">
+                  비밀 보장을 최우선으로 하는 전문 여성 상담사. 익명 상담으로 마음 편히 대화하세요.
+                </p>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-white/60">⭐ 4.7 (634회)</span>
+                  <span className="text-white font-bold">분당 $0.14</span>
+                </div>
+                <button className="w-full mt-4 py-2 bg-white/20 text-white/80 rounded-lg cursor-not-allowed">
+                  현재 오프라인
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* CallOverlay - 통화 중일 때만 표시 */}
+          {isCalling && callData && (
+            <CallOverlay
+              callId={callData.callId}
+              counselors={callData.counselors}
+              onCancel={handleCancelCall}
+            />
+          )}
+
+          {/* 서비스 안내 */}
+          <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 max-w-3xl mx-auto">
+            <h3 className="text-2xl font-semibold text-white mb-4">서비스 이용 안내</h3>
+            <div className="text-left space-y-4 text-white/80">
+              <div className="flex items-start gap-3">
+                <span className="text-lg">✓</span>
+                <div>
+                  <strong className="text-white">익명 보장:</strong> 모든 통화는 완전히 익명으로 진행되며, 개인정보는 절대 수집되지 않습니다.
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="text-lg">✓</span>
+                <div>
+                  <strong className="text-white">품질 보장:</strong> 전문 상담사와의 고품질 음성 연결로 최상의 상담 경험을 제공합니다.
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="text-lg">✓</span>
+                <div>
+                  <strong className="text-white">투명한 과금:</strong> 분당 $0.14 고정 통화료로 예상 비용을 정확히 계산할 수 있습니다.
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="text-lg">✓</span>
+                <div>
+                  <strong className="text-white">안전한 결제:</strong> 암호화폐 기반 결제 시스템으로 안전하게 결제할 수 있습니다.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* 푸터 */}
+      <footer className="container mx-auto px-4 py-8 mt-16 border-t border-white/10">
+        <div className="max-w-4xl mx-auto text-center text-white/60 text-sm">
+          <p>© 2024 Secret Line. All rights reserved.</p>
+          <div className="mt-4 flex justify-center gap-6">
+            <a href="/terms" className="hover:text-white/80 transition-colors">이용약관</a>
+            <a href="/privacy" className="hover:text-white/80 transition-colors">개인정보처리방침</a>
+            <a href="/contact" className="hover:text-white/80 transition-colors">문의하기</a>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}

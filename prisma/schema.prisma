@@ -1,0 +1,280 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// 사용자 모델
+model User {
+  id          String   @id @default(cuid())
+  email       String?  @unique
+  phone       String?  @unique
+  password    String?  // 비밀번호 (해시된 값 저장)
+  name        String?
+  role        UserRole @default(MEMBER)
+  gender      Gender?
+  coins       Int      @default(0) // 코인 잔액
+  status      CounselorStatus? // 상담사 온라인 상태 (ONLINE/OFFLINE)
+  
+  // 중복 로그인 방지
+  lastSessionId String?  // 마지막 세션 ID (새 로그인 시 기존 세션 무효화)
+  nickname      String?  // 닉네임 (getDisplayName 우선순위 2)
+  
+  // 관리자 권한 등급 (향후 확장용)
+  adminRole     AdminRole? // 관리자 등급 (OPERATOR, FINANCE, SUPER)
+  
+  // 글로벌 상담사 정보 (Phase 2)
+  country     String?  // 국가코드 (ISO 3166-1: KR, PH, JP, VN 등)
+  region      String?  // 지역코드 (SEA, EAST_ASIA, EUROPE, AMERICAS, AFRICA 등)
+  languages   String?  // 구사 언어 (JSON 문자열: ["ko", "en", "ja"])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 관계
+  payments        Payment[]
+  callsAsCaller   Call[]     @relation("CallerCalls")
+  callsAsCounselor Call[]    @relation("CounselorCalls")
+  referrals       Referral[] @relation("ReferrerUser")
+  referredBy      Referral?  @relation("ReferredUser")
+  settlements     Settlement[]
+  counselorProfile CounselorProfile?
+  withdrawalRequests WithdrawalRequest[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  MEMBER      // 일반 회원
+  COUNSELOR   // 상담사
+  ADMIN       // 관리자
+}
+
+enum AdminRole {
+  OPERATOR    // 운영자 (일반 관리)
+  FINANCE     // 재무관리자 (정산/출금 관리)
+  SUPER       // 최고관리자 (모든 권한)
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum CounselorStatus {
+  ONLINE
+  OFFLINE
+}
+
+// 결제 모델
+model Payment {
+  id              String        @id @default(cuid())
+  userId          String
+  amount          Float         // 결제 금액 (USD)
+  currency        String        @default("USD")
+  paymentId       String        @unique // NOWPayments 결제 ID
+  status          PaymentStatus @default(PENDING)
+  paymentMethod   String?       // 결제 수단
+  metadata        Json?         // 추가 메타데이터
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // 관계
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// 통화 모델
+model Call {
+  id              String   @id @default(cuid())
+  callerId        String   // 통화 요청자 (남성 회원)
+  counselorId     String   // 상담사
+  status          CallStatus @default(INITIATED)
+  startedAt       DateTime?
+  endedAt         DateTime?
+  duration        Int?     @default(0) // 통화 시간 (초)
+  cost            Float?   // 통화 비용 (USD)
+  agoraChannel    String?  // Agora 채널명
+  agoraToken      String?  // Agora 토큰
+  referralId      String?  // 추천인 ID (있을 경우)
+  
+  // 글로벌 매칭 정보 (Phase 2)
+  preferredRegion String?  // 사용자 선호 지역 (SEA, EAST_ASIA, EUROPE 등)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // 관계
+  caller          User     @relation("CallerCalls", fields: [callerId], references: [id], onDelete: Cascade)
+  counselor       User     @relation("CounselorCalls", fields: [counselorId], references: [id], onDelete: Cascade)
+  referral        Referral? @relation(fields: [referralId], references: [id])
+  settlements     Settlement[]
+
+  @@map("calls")
+}
+
+enum CallStatus {
+  INITIATED   // 시작됨
+  CONNECTING  // 연결 중
+  ACTIVE      // 진행 중
+  ENDED       // 종료됨
+  CANCELLED   // 취소됨
+}
+
+// 추천인 모델
+model Referral {
+  id              String   @id @default(cuid())
+  referrerId      String   // 추천인 (남성 회원)
+  referredId      String   // 피추천인 (신규 회원)
+  referralCode    String   @unique // 추천인 코드
+  status          ReferralStatus @default(ACTIVE)
+  totalEarnings   Float    @default(0) // 총 수익
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // 관계
+  referrer        User     @relation("ReferrerUser", fields: [referrerId], references: [id], onDelete: Cascade)
+  referred        User     @relation("ReferredUser", fields: [referredId], references: [id], onDelete: Cascade)
+  
+  @@unique([referredId])
+  calls           Call[]
+
+  @@map("referrals")
+}
+
+enum ReferralStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// 정산 모델
+model Settlement {
+  id              String   @id @default(cuid())
+  userId          String   // 정산 대상자
+  callId          String?  // 관련 통화 ID
+  amount          Float    // 정산 금액
+  type            SettlementType
+  percentage      Float    // 배분 비율 (0.6, 0.1, 0.3, 0.4 등)
+  status          SettlementStatus @default(PENDING)
+  settledAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // 관계
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  call            Call?    @relation(fields: [callId], references: [id], onDelete: SetNull)
+
+  @@map("settlements")
+}
+
+enum SettlementType {
+  COUNSELOR    // 상담사 정산 (60%)
+  REFERRER     // 추천인 정산 (10%)
+  COMPANY      // 회사 정산 (30% 또는 40%)
+}
+
+enum SettlementStatus {
+  PENDING      // 대기 중
+  PROCESSING   // 처리 중
+  COMPLETED    // 완료
+  FAILED       // 실패
+}
+
+// 상담사 프로필 모델
+model CounselorProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  status      CounselorApplicationStatus @default(PENDING) // 신청 상태
+  
+  // 프로필 정보
+  displayName String?  // 활동명
+  country     String?  // 거주 국가 (KR, JP, US, CN, VN, OTHER 등)
+  voiceTone   String?  // 보이스 톤 태그 (JSON 문자열: ["부드러운", "차분한", "따뜻한"] 등)
+  specialty   String?  // 전문 분야
+  bio         String?  // 자기소개
+  
+  // 관리자 승인 정보
+  approvedAt  DateTime? // 승인 일시
+  rejectedAt  DateTime? // 거절 일시
+  rejectedReason String? // 거절 사유
+  approvedBy  String?  // 승인한 관리자 ID
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 관계
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("counselor_profiles")
+}
+
+enum CounselorApplicationStatus {
+  PENDING   // 대기 중
+  APPROVED  // 승인됨
+  REJECTED  // 거절됨
+}
+
+// 시스템 설정 모델
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String   // JSON 문자열로 저장
+  description String?  // 설정 설명
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+// 출금 신청 모델 (USDT 전용)
+model WithdrawalRequest {
+  id              String   @id @default(cuid())
+  userId          String
+  
+  // 출금 정보 (USDT 전용)
+  coinAmount      Int      // 차감할 코인 수
+  usdtAmount      Float    // 정산 받을 USDT 금액
+  walletAddress   String   // USDT 지갑 주소
+  network         String   // 네트워크 (TRC-20, ERC-20, BEP-20 등)
+  
+  // 상태 관리
+  status          WithdrawalStatus @default(PENDING)
+  rejectedReason  String?  // 반려 사유
+  processedBy     String?  // 처리한 관리자 ID
+  txHash          String?  // 트랜잭션 해시 (송금 완료 시)
+  
+  // 타임스탬프
+  requestedAt     DateTime @default(now())
+  processedAt     DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // 관계
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("withdrawal_requests")
+}
+
+enum WithdrawalStatus {
+  PENDING         // 대기 중 (관리자 승인 필요)
+  AUTO_COMPLETED  // 자동 완료 (소액 자동 승인)
+  MANUAL_COMPLETED // 수동 완료 (관리자 승인)
+  REJECTED        // 반려됨
+}
+

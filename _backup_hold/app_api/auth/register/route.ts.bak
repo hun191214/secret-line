@@ -1,0 +1,200 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { prisma, ensurePrismaConnected } from '@/lib/prisma';
+
+/**
+ * 회원가입 API: 실제 DB 저장 우선, 실패 시 Mock 저장소 사용
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { email, password, role } = body;
+
+    // 입력 형식 검증
+    if (!email || !password) {
+      return NextResponse.json(
+        { success: false, message: '이메일과 비밀번호를 입력해주세요.' },
+        { status: 400 }
+      );
+    }
+
+    // 이메일 형식 검증
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { success: false, message: '올바른 이메일 형식이 아닙니다.' },
+        { status: 400 }
+      );
+    }
+
+    // 비밀번호 최소 길이 검증
+    if (password.length < 4) {
+      return NextResponse.json(
+        { success: false, message: '비밀번호는 최소 4자 이상이어야 합니다.' },
+        { status: 400 }
+      );
+    }
+
+    // 역할 검증
+    if (role !== 'MEMBER' && role !== 'COUNSELOR') {
+      return NextResponse.json(
+        { success: false, message: '유효한 역할을 선택해주세요.' },
+        { status: 400 }
+      );
+    }
+
+    const cookieStore = await cookies();
+    const mockUserEmail = email;
+    const userRole = role || 'MEMBER';
+
+    // 실제 DB 연결 확인 및 연결 상태 점검
+    try {
+      // Prisma 연결 상태 확인
+      await prisma.$connect();
+      console.log('✅ Prisma 연결 확인 성공');
+    } catch (connectError: any) {
+      console.error('❌ Prisma 연결 실패:', connectError?.message);
+      return NextResponse.json(
+        { success: false, message: '데이터베이스 연결에 실패했습니다. 잠시 후 다시 시도해주세요.' },
+        { status: 503 }
+      );
+    }
+
+    const isConnected = await ensurePrismaConnected();
+    
+    if (!isConnected) {
+      console.warn('⚠️ DB 연결 확인 실패했지만 SQLite는 자동 생성되므로 계속 진행합니다.');
+    }
+
+    // 이미 존재하는 이메일인지 확인 (엄격한 체크)
+    let existingUser = null;
+    try {
+      existingUser = await prisma.user.findUnique({
+        where: { email: mockUserEmail },
+        select: { id: true, email: true },
+      });
+      
+      if (existingUser) {
+        console.log('⚠️ 중복 가입 시도 감지:', mockUserEmail);
+        return NextResponse.json(
+          { success: false, message: '이미 가입된 이메일입니다.' },
+          { status: 400 }
+        );
+      }
+    } catch (checkError: any) {
+      console.error('❌ 이메일 중복 확인 중 오류:', checkError?.message);
+      // 조회 오류는 무시하고 계속 진행 (DB 연결 문제일 수 있음)
+      // Unique constraint 에러는 아래에서 처리됨
+    }
+
+    // 실제 DB에 사용자 생성 (재시도 로직 및 Unique constraint 에러 처리 포함)
+    let newUser;
+    const maxRetries = 2;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        newUser = await prisma.user.create({
+          data: {
+            email: mockUserEmail,
+            password: password, // 실제 운영에서는 해시화 필요
+            role: userRole as 'MEMBER' | 'COUNSELOR',
+          },
+        });
+        // 성공하면 반복문 탈출
+        break;
+      } catch (dbError: any) {
+        // Prisma Unique constraint 에러 체크 (P2002)
+        if (dbError.code === 'P2002') {
+          // Unique constraint 위반 (중복 이메일)
+          const targetField = dbError.meta?.target || 'email';
+          console.error('❌ 중복 가입 시도 감지 (Unique constraint):', mockUserEmail, 'Target:', targetField);
+          
+          if (targetField.includes('email')) {
+            return NextResponse.json(
+              { success: false, message: '이미 가입된 이메일입니다.' },
+              { status: 400 }
+            );
+          }
+          // 다른 필드의 unique constraint 위반
+          return NextResponse.json(
+            { success: false, message: '중복된 정보로 인해 가입할 수 없습니다.' },
+            { status: 400 }
+          );
+        }
+        
+        // 파일 쓰기 권한 에러 체크
+        if (dbError.message?.includes('locked') || dbError.message?.includes('unable to open')) {
+          console.error('❌ 데이터베이스 파일 쓰기 권한 오류:', dbError?.message);
+          console.error('   → 원인: SQLite 데이터베이스 파일이 잠겨있거나 쓰기 권한이 없습니다.');
+          console.error('   → 해결: 서버를 재시작하거나 dev.db-journal 파일을 삭제하세요.');
+          
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 500)); // 더 긴 대기
+            continue;
+          }
+          
+          return NextResponse.json(
+            { success: false, message: '데이터베이스가 잠겨있습니다. 잠시 후 다시 시도해주세요.' },
+            { status: 503 }
+          );
+        }
+        
+        console.error(`❌ 회원가입 시도 ${attempt + 1}/${maxRetries + 1} 실패:`, dbError?.message);
+        console.error('   → 에러 코드:', dbError.code || 'N/A');
+        console.error('   → 에러 상세:', JSON.stringify(dbError, null, 2));
+        
+        // SQLite 파일 생성 중일 수 있으므로 재시도 (Unique constraint 및 잠금 에러 제외)
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+          continue;
+        }
+        
+        // 모든 재시도 실패
+        console.error('❌ 모든 재시도 실패. 최종 에러:', dbError?.message);
+        return NextResponse.json(
+          { success: false, message: '회원가입 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' },
+          { status: 500 }
+        );
+      }
+    }
+
+    if (!newUser) {
+      console.error('❌ 회원가입 실패: newUser가 생성되지 않았습니다.');
+      return NextResponse.json(
+        { success: false, message: '회원가입에 실패했습니다.' },
+        { status: 500 }
+      );
+    }
+
+    console.log('✅ 회원가입 성공:', mockUserEmail, '역할:', newUser.role);
+
+    // 세션 쿠키 설정
+    cookieStore.set('auth_session', JSON.stringify({
+      userId: newUser.id,
+      email: mockUserEmail,
+      role: newUser.role,
+      registerTime: Date.now(),
+    }), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7일
+      path: '/',
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: '회원가입 성공',
+      user: {
+        email: mockUserEmail,
+        role: newUser.role,
+      },
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, message: '서버 오류가 발생했습니다.' },
+      { status: 500 }
+    );
+  }
+}
+
