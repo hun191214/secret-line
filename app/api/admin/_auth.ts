@@ -41,7 +41,7 @@ async function getAuthenticatedUser(): Promise<AuthResult> {
   const email: string | undefined = session.email;
   const userId: string | undefined = session.userId;
 
-  // 1) 마스터 계정: 이메일 기준 우선 처리 및 DB 동기화
+  // 1) 마스터 계정 처리
   if (email === SUPER_ADMIN_EMAIL) {
     const existing = await prisma.user.findUnique({
       where: { email: SUPER_ADMIN_EMAIL },
@@ -49,11 +49,7 @@ async function getAuthenticatedUser(): Promise<AuthResult> {
     });
 
     if (!existing) {
-      return {
-        user: null,
-        status: 403,
-        message: '마스터 관리자 계정을 찾을 수 없습니다.',
-      };
+      return { user: null, status: 403, message: '마스터 관리자 계정을 찾을 수 없습니다.' };
     }
 
     if (existing.role !== 'ADMIN' || existing.adminRole !== 'SUPER') {
@@ -64,25 +60,25 @@ async function getAuthenticatedUser(): Promise<AuthResult> {
       });
       return { 
         user: { 
-          id: updated.id,
+          id: String(updated.id),
           email: updated.email ?? '',
           role: String(updated.role),
-          adminRole: updated.adminRole
-        } 
+          adminRole: updated.adminRole ? String(updated.adminRole) : null
+        } as AuthUser 
       };
     }
 
     return { 
       user: { 
-        id: existing.id,
+        id: String(existing.id),
         email: existing.email ?? '',
         role: String(existing.role),
-        adminRole: existing.adminRole
-      } 
+        adminRole: existing.adminRole ? String(existing.adminRole) : null
+      } as AuthUser
     };
   }
 
-  // 2) 일반 관리자: userId 기반 조회
+  // 2) 일반 관리자 처리
   if (!userId) {
     return { user: null, status: 401, message: '세션 정보가 올바르지 않습니다.' };
   }
@@ -96,64 +92,36 @@ async function getAuthenticatedUser(): Promise<AuthResult> {
     return { user: null, status: 403, message: '사용자를 찾을 수 없습니다.' };
   }
 
-  // ⭐ 이 부분도 수정했습니다! (일반 관리자 반환 시 타입 오류 해결)
   return { 
     user: { 
-      id: user.id,
+      id: String(user.id),
       email: user.email ?? '',
       role: String(user.role),
-      adminRole: user.adminRole
-    } 
+      adminRole: user.adminRole ? String(user.adminRole) : null
+    } as AuthUser
   };
 }
 
 export async function requireSuperAdmin(): Promise<AdminGuardResult> {
   const { user, status, message } = await getAuthenticatedUser();
-
-  if (!user) {
-    return {
-      authorized: false,
-      status: status ?? 401,
-      message: message ?? '인증에 실패했습니다.',
-    };
-  }
-
-  if (
-    user.email === SUPER_ADMIN_EMAIL ||
-    (user.role === 'ADMIN' && user.adminRole === 'SUPER')
-  ) {
+  if (!user) return { authorized: false, status: status ?? 401, message: message ?? '인증 실패' };
+  
+  if (user.email === SUPER_ADMIN_EMAIL || (user.role === 'ADMIN' && user.adminRole === 'SUPER')) {
     return { authorized: true, user };
   }
-
-  return {
-    authorized: false,
-    status: 403,
-    message: '최고관리자 권한이 필요합니다.',
-  };
+  return { authorized: false, status: 403, message: '최고관리자 권한이 필요합니다.' };
 }
 
 export async function requireAdmin(allowedRoles: string[]): Promise<AdminGuardResult> {
   const { user, status, message } = await getAuthenticatedUser();
-
-  if (!user) {
-    return {
-      authorized: false,
-      status: status ?? 401,
-      message: message ?? '인증에 실패했습니다.',
-    };
-  }
+  if (!user) return { authorized: false, status: status ?? 401, message: message ?? '인증 실패' };
 
   if (user.email === SUPER_ADMIN_EMAIL || user.adminRole === 'SUPER') {
     return { authorized: true, user };
   }
 
   if (user.role !== 'ADMIN' || !user.adminRole || !allowedRoles.includes(user.adminRole)) {
-    return {
-      authorized: false,
-      status: 403,
-      message: '해당 메뉴에 대한 접근 권한이 없습니다.',
-    };
+    return { authorized: false, status: 403, message: '권한이 없습니다.' };
   }
-
   return { authorized: true, user };
 }
