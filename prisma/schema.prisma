@@ -6,8 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // 사용자 모델
@@ -277,4 +277,3 @@ enum WithdrawalStatus {
   MANUAL_COMPLETED // 수동 완료 (관리자 승인)
   REJECTED        // 반려됨
 }
-
