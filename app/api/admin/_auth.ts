@@ -62,23 +62,22 @@ async function getAuthenticatedUser(): Promise<AuthResult> {
         data: { role: 'ADMIN', adminRole: 'SUPER' },
         select: { id: true, email: true, role: true, adminRole: true },
       });
-      // email이 null일 경우를 대비해 ?? '' 처리를 추가했습니다.
       return { 
         user: { 
-          ...updated, 
+          id: updated.id,
           email: updated.email ?? '',
           role: String(updated.role),
-          adminRole: updated.adminRole ? String(updated.adminRole) : null
+          adminRole: updated.adminRole
         } 
       };
     }
 
     return { 
       user: { 
-        ...existing, 
+        id: existing.id,
         email: existing.email ?? '',
         role: String(existing.role),
-        adminRole: existing.adminRole ? String(existing.adminRole) : null
+        adminRole: existing.adminRole
       } 
     };
   }
@@ -97,12 +96,13 @@ async function getAuthenticatedUser(): Promise<AuthResult> {
     return { user: null, status: 403, message: '사용자를 찾을 수 없습니다.' };
   }
 
+  // ⭐ 이 부분도 수정했습니다! (일반 관리자 반환 시 타입 오류 해결)
   return { 
     user: { 
-      ...user, 
+      id: user.id,
       email: user.email ?? '',
       role: String(user.role),
-      adminRole: user.adminRole ? String(user.adminRole) : null
+      adminRole: user.adminRole
     } 
   };
 }
@@ -143,7 +143,6 @@ export async function requireAdmin(allowedRoles: string[]): Promise<AdminGuardRe
     };
   }
 
-  // 마스터 계정 및 SUPER 등급은 항상 통과
   if (user.email === SUPER_ADMIN_EMAIL || user.adminRole === 'SUPER') {
     return { authorized: true, user };
   }
