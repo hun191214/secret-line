@@ -5,8 +5,6 @@ import { requireAdmin } from '@/app/api/admin/_auth';
 /**
  * 상담사 신청 거절 API
  * PATCH /api/admin/counselor-requests/[id]/reject
- * 
- * ⚠️ 주의: Prisma 6.2.0 버전 유지 필수
  */
 
 export const runtime = 'nodejs';
@@ -18,72 +16,49 @@ export async function PATCH(
   { params }: { params: RouteParams }
 ) {
   try {
-    // SUPER, OPERATOR 허용
     const guard = await requireAdmin(['SUPER', 'OPERATOR']);
     if (!guard.authorized) {
-      return NextResponse.json(
-        { success: false, message: guard.message },
-        { status: guard.status }
-      );
+      return NextResponse.json({ success: false, message: guard.message }, { status: guard.status });
     }
 
     const { id } = await params;
+    const { reason } = await request.json();
 
-    // 요청 본문 파싱 (거절 사유)
-    const body = await request.json();
-    const { reason } = body;
+    if (!reason) {
+      return NextResponse.json({ success: false, message: '거절 사유를 입력해주세요.' }, { status: 400 });
+    }
 
     const isConnected = await ensurePrismaConnected();
     if (!isConnected) {
-      return NextResponse.json(
-        { success: false, message: '데이터베이스 연결에 실패했습니다.' },
-        { status: 503 }
-      );
+      return NextResponse.json({ success: false, message: 'DB 연결 실패' }, { status: 503 });
     }
 
-    // 신청 조회
     const profile = await prisma.counselorProfile.findUnique({
       where: { id },
       include: { user: true },
     });
 
     if (!profile) {
-      return NextResponse.json(
-        { success: false, message: '신청을 찾을 수 없습니다.' },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, message: '신청을 찾을 수 없음' }, { status: 404 });
     }
 
-    if (profile.status === 'REJECTED') {
-      return NextResponse.json(
-        { success: false, message: '이미 거절된 신청입니다.' },
-        { status: 400 }
-      );
-    }
-
-    // 프로필 상태 업데이트
     await prisma.counselorProfile.update({
       where: { id },
       data: {
         status: 'REJECTED',
         rejectedAt: new Date(),
-        rejectedReason: reason || '관리자에 의해 거절되었습니다.',
-        approvedBy: guard.user.id,
+        rejectedReason: reason,
+        approvedAt: null,
+        approvedBy: null,
       },
     });
 
-    console.log(`❌ [상담사 거절] 관리자 ${session.email}: ${profile.user.email} 거절 (사유: ${reason || '없음'})`);
+    // ✅ 수정 완료: session.email -> guard.user.email
+    console.log(`❌ [상담사 거절] 관리자 ${guard.user.email}: ${profile.user.email} 거절 완료 (사유: ${reason})`);
 
-    return NextResponse.json({
-      success: true,
-      message: '신청이 거절되었습니다.',
-    });
+    return NextResponse.json({ success: true, message: '신청이 거절되었습니다.' });
   } catch (error: any) {
     console.error('신청 거절 오류:', error?.message);
-    return NextResponse.json(
-      { success: false, message: '신청 거절 중 오류가 발생했습니다.' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: '오류 발생' }, { status: 500 });
   }
 }
-

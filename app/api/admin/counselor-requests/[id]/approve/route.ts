@@ -77,7 +77,7 @@ export async function PATCH(
       });
     });
 
-    // ⭐ 수정된 부분: session.email을 guard.user.email로 변경
+    // ✅ 수정 완료: session.email -> guard.user.email
     console.log(`✅ [상담사 승인] 관리자 ${guard.user.email}: ${profile.user.email} 승인 완료`);
 
     return NextResponse.json({
