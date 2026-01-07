@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma, isPrismaConnected } from '@/lib/prisma';
+import { prisma, ensurePrismaConnected } from '@/lib/prisma';
 
 /**
  * 온라인 상담사 수 조회 API
@@ -10,8 +10,11 @@ export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
+    // DB 연결 확인
+    const isConnected = await ensurePrismaConnected();
+    
     // DB 연결 실패 시 Mock 데이터 반환
-    if (!isPrismaConnected) {
+    if (!isConnected) {
       return NextResponse.json({
         success: true,
         count: 3, // Mock 데이터: 기본 3명

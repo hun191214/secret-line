@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { prisma, isPrismaConnected } from '@/lib/prisma';
+import { prisma, ensurePrismaConnected } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
 
@@ -75,8 +75,11 @@ export async function GET(request: NextRequest) {
       // 세션 확인 실패 시 무시 (상담사 목록은 계속 반환)
     }
 
+    // DB 연결 확인
+    const isConnected = await ensurePrismaConnected();
+    
     // DB 연결 실패 시 Mock Data 반환
-    if (!isPrismaConnected) {
+    if (!isConnected) {
       // 로그인한 상담사가 있고 온라인 상태라면 목록 상단에 배치
       let counselors = [...MOCK_COUNSELORS];
       if (loggedInCounselorStatus && loggedInCounselorStatus.status === 'online') {
