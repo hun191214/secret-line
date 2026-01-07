@@ -18,15 +18,11 @@ export async function PATCH(request: NextRequest, { params }: { params: RoutePar
     if (!profile) return NextResponse.json({ success: false, message: '신청 없음' }, { status: 404 });
 
     await prisma.$transaction(async (tx) => {
-      await tx.counselorProfile.update({
-        where: { id },
-        data: { status: 'APPROVED', approvedAt: new Date(), approvedBy: guard.user.id }
-      });
+      await tx.counselorProfile.update({ where: { id }, data: { status: 'APPROVED', approvedAt: new Date(), approvedBy: guard.user.id } });
       await tx.user.update({ where: { id: profile.userId }, data: { role: 'COUNSELOR' } });
     });
 
-    // ✅ guard.user.email을 사용하여 에러 해결
-    console.log(`✅ [상담사 승인] 관리자 ${guard.user.email}: ${profile.user.email} 완료`);
+    console.log(`✅ [상담사 승인] 관리자 ${guard.user.email}: ${profile.user.email} 승인 완료`);
     return NextResponse.json({ success: true, message: '승인 완료' });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: '오류 발생' }, { status: 500 });
