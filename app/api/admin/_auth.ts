@@ -62,10 +62,25 @@ async function getAuthenticatedUser(): Promise<AuthResult> {
         data: { role: 'ADMIN', adminRole: 'SUPER' },
         select: { id: true, email: true, role: true, adminRole: true },
       });
-      return { user: updated };
+      // email이 null일 경우를 대비해 ?? '' 처리를 추가했습니다.
+      return { 
+        user: { 
+          ...updated, 
+          email: updated.email ?? '',
+          role: String(updated.role),
+          adminRole: updated.adminRole ? String(updated.adminRole) : null
+        } 
+      };
     }
 
-    return { user: existing };
+    return { 
+      user: { 
+        ...existing, 
+        email: existing.email ?? '',
+        role: String(existing.role),
+        adminRole: existing.adminRole ? String(existing.adminRole) : null
+      } 
+    };
   }
 
   // 2) 일반 관리자: userId 기반 조회
@@ -82,7 +97,14 @@ async function getAuthenticatedUser(): Promise<AuthResult> {
     return { user: null, status: 403, message: '사용자를 찾을 수 없습니다.' };
   }
 
-  return { user };
+  return { 
+    user: { 
+      ...user, 
+      email: user.email ?? '',
+      role: String(user.role),
+      adminRole: user.adminRole ? String(user.adminRole) : null
+    } 
+  };
 }
 
 export async function requireSuperAdmin(): Promise<AdminGuardResult> {
@@ -136,4 +158,3 @@ export async function requireAdmin(allowedRoles: string[]): Promise<AdminGuardRe
 
   return { authorized: true, user };
 }
-
