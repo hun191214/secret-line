@@ -58,6 +58,13 @@ export default function AdminLayoutShell({
       emoji: '💰',
       allowedRoles: ['FINANCE', 'SUPER'],
     },
+    {
+      id: 'coin-logs',
+      label: '📜 코인 지급 내역',
+      path: `/${locale}/admin/coin-logs`,
+      emoji: '📜',
+      allowedRoles: ['OPERATOR', 'SUPER'],
+    },
   ];
 
   const menuItems = allMenuItems.filter((item) => {
@@ -183,7 +190,7 @@ export default function AdminLayoutShell({
                       }
                 }
               >
-                {item.emoji} {item.label.split(' ')[1]}
+                {item.emoji} {item.label.split(' ').slice(1).join(' ')}
               </Link>
             ))}
           </div>
