@@ -8,7 +8,7 @@ import { prisma, ensurePrismaConnected } from '@/lib/prisma';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, role } = body;
+    const { email, password, role, name } = body;
 
     // 입력 형식 검증
     if (!email || !password) {
@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
             password: password, // 실제 운영에서는 해시화 필요
             role: userRole as 'MEMBER' | 'COUNSELOR',
             gender: userGender as 'MALE' | 'FEMALE', // ★★★ 성별 정보 저장 ★★★
+            nickname: name || null, // ★★★ 닉네임 저장 (name 필드를 nickname으로 매핑) ★★★
           },
         });
         // 성공하면 반복문 탈출
@@ -174,6 +175,7 @@ export async function POST(request: NextRequest) {
       email: mockUserEmail,
       role: newUser.role,
       gender: newUser.gender, // ★★★ 성별 정보 저장 ★★★
+      nickname: newUser.nickname || null, // ★★★ 닉네임 정보 저장 ★★★
       registerTime: Date.now(),
     }), {
       httpOnly: true,
