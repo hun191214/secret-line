@@ -46,6 +46,7 @@ model User {
   settlements     Settlement[]
   counselorProfile CounselorProfile?
   withdrawalRequests WithdrawalRequest[]
+  coinGrantLogs   CoinGrantLog[]
 
   @@map("users")
 }
@@ -276,4 +277,22 @@ enum WithdrawalStatus {
   AUTO_COMPLETED  // 자동 완료 (소액 자동 승인)
   MANUAL_COMPLETED // 수동 완료 (관리자 승인)
   REJECTED        // 반려됨
+}
+
+// 코인 지급 로그 모델 (관리자 코인 지급 기록)
+model CoinGrantLog {
+  id              String   @id @default(cuid())
+  userId          String   // 지급받은 사용자
+  grantedBy       String   // 지급한 관리자 ID
+  grantedByEmail  String   // 지급한 관리자 이메일
+  amount          Int      // 지급한 코인 수량
+  reason          String   // 지급 사유
+  previousBalance Int      // 지급 전 잔액
+  newBalance      Int      // 지급 후 잔액
+  createdAt       DateTime @default(now())
+
+  // 관계
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("coin_grant_logs")
 }

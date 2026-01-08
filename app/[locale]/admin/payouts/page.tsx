@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 
 interface Withdrawal {
   id: string;
@@ -238,17 +239,8 @@ export default function AdminUSDTPayoutsPage() {
   // 권한 오류 전용 화면
   if (error && error.includes('권한')) {
     return (
-      <div className="min-h-screen bg-[#0B0B0B] text-white">
-        <header className="container mx-auto px-4 py-6 border-b border-[#26A17B]/20">
-          <div className="flex items-center justify-between">
-            <a href={`/${locale}`} className="text-2xl font-bold" style={{ color: '#26A17B' }}>
-              {t('common.siteName')}
-            </a>
-            <div />
-          </div>
-        </header>
-
-        <main className="container mx-auto px-4 py-16 max-w-lg">
+      <div className="text-white">
+        <div className="max-w-lg mx-auto py-16">
           <div
             className="p-8 rounded-2xl text-center"
             style={{
@@ -259,53 +251,22 @@ export default function AdminUSDTPayoutsPage() {
             <div className="text-5xl mb-4">🔒</div>
             <h1 className="text-2xl font-bold text-red-400 mb-4">접근 권한 없음</h1>
             <p className="text-gray-300 mb-6">{error}</p>
-            <a
-              href={`/${locale}`}
+            <Link
+              href={`/${locale}/admin`}
               className="inline-block px-6 py-3 rounded-lg font-semibold text-black transition-all transform hover:scale-105"
               style={{ backgroundColor: '#26A17B' }}
             >
-              메인으로 돌아가기
-            </a>
+              관리자 메인으로 돌아가기
+            </Link>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0B0B0B] text-white">
-      {/* 헤더 */}
-      <header className="border-b border-[#26A17B]/20 sticky top-0 bg-[#0B0B0B]/95 backdrop-blur-sm z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <a href={`/${locale}`} className="text-2xl font-bold" style={{ color: '#26A17B' }}>
-                {t('common.siteName')}
-              </a>
-              <nav className="flex gap-4 items-center mt-2">
-                <a
-                  href={`/${locale}/admin/counselors`}
-                  className="text-white/60 hover:text-white transition-colors text-sm"
-                >
-                  상담사 관리
-                </a>
-                <span className="text-white/40">|</span>
-                <a
-                  href={`/${locale}/admin/requests`}
-                  className="text-white/60 hover:text-white transition-colors text-sm"
-                >
-                  신청 관리
-                </a>
-                <span className="text-white/40">|</span>
-                <span className="text-[#26A17B] text-sm font-semibold">💎 USDT 정산</span>
-              </nav>
-            </div>
-            <div />
-          </div>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="text-white">
+      <div className="max-w-6xl mx-auto">
         {/* 통계 카드 */}
         {stats && (
           <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -504,7 +465,7 @@ export default function AdminUSDTPayoutsPage() {
             ))}
           </div>
         )}
-      </main>
+      </div>
 
       {/* 반려 모달 */}
       {rejectingId && (

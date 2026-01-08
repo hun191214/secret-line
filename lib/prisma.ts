@@ -12,12 +12,19 @@ if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
 
-export async function ensurePrismaConnected(): Promise<boolean> {
-  try {
-    await prisma.$connect();
-    return true;
-  } catch (error) {
-    console.error('Prisma connection failed:', error);
-    return false;
+export async function ensurePrismaConnected(maxRetries: number = 3): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // 단순 연결 대신 실제 쿼리로 연결 확인 (더 신뢰성 있음)
+      await prisma.$queryRaw`SELECT 1`;
+      return true;
+    } catch (error) {
+      console.error(`Prisma connection attempt ${attempt}/${maxRetries} failed:`, error);
+      if (attempt < maxRetries) {
+        // 재시도 전 짧은 대기
+        await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+      }
+    }
   }
+  return false;
 }

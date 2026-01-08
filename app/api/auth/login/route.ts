@@ -57,6 +57,8 @@ export async function POST(request: NextRequest) {
           id: true,
           email: true,
           role: true,
+          adminRole: true, // ★★★ adminRole 추가 ★★★
+          nickname: true, // ★★★ nickname 추가 ★★★
           password: true,
           coins: true, // 코인 잔액도 함께 조회
         },
@@ -102,11 +104,31 @@ export async function POST(request: NextRequest) {
       // 업데이트 실패해도 로그인은 진행
     }
 
+    // ★★★ 마스터 계정 자동 동기화 ★★★
+    const SUPER_ADMIN_EMAIL = 'limtaesik@gmail.com';
+    if (mockUserEmail === SUPER_ADMIN_EMAIL) {
+      if (user.role !== 'ADMIN' || user.adminRole !== 'SUPER') {
+        try {
+          const updatedUser = await prisma.user.update({
+            where: { id: user.id },
+            data: { role: 'ADMIN', adminRole: 'SUPER' },
+            select: { id: true, role: true, adminRole: true },
+          });
+          user.role = updatedUser.role as any;
+          user.adminRole = updatedUser.adminRole as any;
+        } catch (updateError) {
+          console.error('마스터 계정 동기화 실패:', updateError);
+        }
+      }
+    }
+
     // 세션 쿠키 설정 (sessionId로 중복 로그인 검증)
     cookieStore.set('auth_session', JSON.stringify({
       userId: user.id,
       email: mockUserEmail,
       role: user.role,
+      adminRole: user.adminRole || null, // ★★★ adminRole 추가 ★★★
+      nickname: user.nickname || null, // ★★★ nickname 추가 ★★★
       coins: user.coins || 0,
       loginTime: loginTime,
       sessionId: newSessionId, // DB와 동일한 세션 ID

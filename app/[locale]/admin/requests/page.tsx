@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 
 interface CounselorRequest {
   id: string;
@@ -187,19 +188,9 @@ export default function AdminRequestsPage() {
   // ★★★ 에러 메시지 전용 화면 (권한 없음 등) ★★★
   if (error && error.includes('권한')) {
     return (
-      <div className="min-h-screen bg-[#0B0B0B] text-white">
-        {/* 헤더 */}
-        <header className="container mx-auto px-4 py-6 border-b border-[#D4AF37]/20">
-          <div className="flex items-center justify-between">
-            <a href={`/${locale}`} className="text-2xl font-bold" style={{ color: '#D4AF37' }}>
-              {t('common.siteName')}
-            </a>
-            <div />
-          </div>
-        </header>
-
-        {/* 에러 메시지 (중앙 배치, 충분한 여백) */}
-        <main className="container mx-auto px-4 py-16 max-w-lg">
+      <div className="text-white">
+        {/* 에러 메시지 (중앙 배치) */}
+        <div className="max-w-lg mx-auto py-16">
           <div
             className="p-8 rounded-2xl text-center"
             style={{
@@ -214,43 +205,22 @@ export default function AdminRequestsPage() {
             <p className="text-gray-300 mb-6">
               {error}
             </p>
-            <a
-              href={`/${locale}`}
+            <Link
+              href={`/${locale}/admin`}
               className="inline-block px-6 py-3 rounded-lg font-semibold text-black transition-all transform hover:scale-105"
               style={{ backgroundColor: '#D4AF37' }}
             >
-              메인으로 돌아가기
-            </a>
+              관리자 메인으로 돌아가기
+            </Link>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0B0B0B] text-white p-4">
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        {/* 헤더 */}
-        <header className="mb-8 border-b border-[#D4AF37]/20 pb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <a href={`/${locale}`} className="text-2xl font-bold" style={{ color: '#D4AF37' }}>
-                {t('common.siteName')}
-              </a>
-              <nav className="flex gap-4 items-center mt-2">
-                <a
-                  href={`/${locale}/admin/counselors`}
-                  className="text-white/60 hover:text-white transition-colors text-sm"
-                >
-                  상담사 관리
-                </a>
-                <span className="text-white/40">|</span>
-                <span className="text-white/80 text-sm">신청 관리</span>
-              </nav>
-            </div>
-            <div />
-          </div>
-        </header>
+    <div className="text-white">
+      <div className="max-w-6xl mx-auto">
 
         {/* 자동 승인 모드 토글 */}
         <div

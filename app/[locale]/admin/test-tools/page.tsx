@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 
 export default function AdminTestToolsPage() {
   const params = useParams();
@@ -88,26 +89,8 @@ export default function AdminTestToolsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white p-4">
-      {/* 헤더 */}
-      <header className="container mx-auto px-4 py-6 border-b border-[#D4AF37]/20">
-        <div className="flex items-center justify-between">
-          <a href={`/${locale}`} className="text-2xl font-bold" style={{ color: '#D4AF37' }}>
-            {t('common.siteName')}
-          </a>
-          <nav className="flex gap-4 items-center">
-            <a
-              href={`/${locale}`}
-              className="text-white/80 hover:text-white transition-colors text-sm"
-            >
-              {t('admin.backToMain')}
-            </a>
-          </nav>
-        </div>
-      </header>
-
-      {/* 메인 콘텐츠 */}
-      <main className="container mx-auto px-4 py-12 max-w-2xl">
+    <div className="text-white">
+      <div className="max-w-2xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-2" style={{ color: '#D4AF37' }}>
             {t('admin.testTools.title')}
@@ -242,7 +225,7 @@ export default function AdminTestToolsPage() {
           <p>{t('admin.testTools.warning1')}</p>
           <p>{t('admin.testTools.warning2')}</p>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

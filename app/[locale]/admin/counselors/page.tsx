@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { RegionCode, REGIONS } from '@/lib/regions';
 import { getCountryFlag, getCountryName } from '@/lib/country';
 
@@ -215,46 +216,8 @@ export default function AdminCounselorsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white p-4">
-      {/* 헤더 */}
-      <header className="container mx-auto px-4 py-6 border-b border-[#D4AF37]/20">
-        <div className="flex items-center justify-between">
-          <div>
-            <a href={`/${locale}`} className="text-2xl font-bold" style={{ color: '#D4AF37' }}>
-              {t('common.siteName')}
-            </a>
-            <nav className="flex gap-4 items-center mt-2">
-              <a
-                href={`/${locale}/admin/users`}
-                className="text-white/60 hover:text-white transition-colors text-sm"
-              >
-                👥 유저 관리
-              </a>
-              <span className="text-white/40">|</span>
-              <span className="text-[#D4AF37] text-sm font-semibold">👔 {t('admin.counselors.title')}</span>
-              <span className="text-white/40">|</span>
-              <a
-                href={`/${locale}/admin/requests`}
-                className="text-white/60 hover:text-white transition-colors text-sm"
-              >
-                📝 신청 관리
-              </a>
-              <span className="text-white/40">|</span>
-              <a
-                href={`/${locale}/admin/payouts`}
-                className="text-white/60 hover:text-white transition-colors text-sm"
-              >
-                💰 정산 관리
-              </a>
-            </nav>
-          </div>
-          {/* 상단 공통 Admin 레이아웃에 이미 '메인으로' 버튼이 있으므로 여기서는 제거 */}
-          <nav className="flex gap-4 items-center" />
-        </div>
-      </header>
-
-      {/* 메인 콘텐츠 */}
-      <main className="container mx-auto px-4 py-12 max-w-7xl">
+    <div className="text-white">
+      <div className="max-w-7xl mx-auto">
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2" style={{ color: '#D4AF37' }}>
             {t('admin.counselors.title')}
@@ -374,7 +337,7 @@ export default function AdminCounselorsPage() {
             </div>
           )}
         </div>
-      </main>
+      </div>
 
       {/* 지역 변경 모달 */}
       {regionModal.isOpen && regionModal.counselor && (

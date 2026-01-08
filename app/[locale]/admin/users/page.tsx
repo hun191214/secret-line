@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 import { getCountryFlag, getCountryName } from '@/lib/country';
 
 interface User {
@@ -50,6 +51,12 @@ export default function AdminUsersPage() {
     'USER' | 'OPERATOR' | 'FINANCE' | 'SUPER'
   >('USER');
   const [isSavingRole, setIsSavingRole] = useState(false);
+
+  // 코인 지급 모달 상태
+  const [coinGrantModalUser, setCoinGrantModalUser] = useState<User | null>(null);
+  const [coinAmount, setCoinAmount] = useState<string>('');
+  const [coinReason, setCoinReason] = useState<string>('');
+  const [isGrantingCoins, setIsGrantingCoins] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     setIsLoading(true);
@@ -125,6 +132,79 @@ export default function AdminUsersPage() {
         next.delete(userId);
         return next;
       });
+    }
+  };
+
+  // 코인 지급 모달 열기
+  const openCoinGrantModal = (user: User) => {
+    if (currentAdminRole !== 'SUPER') return;
+    setCoinGrantModalUser(user);
+    setCoinAmount('');
+    setCoinReason('');
+  };
+
+  // 코인 지급 모달 닫기
+  const closeCoinGrantModal = () => {
+    setCoinGrantModalUser(null);
+    setCoinAmount('');
+    setCoinReason('');
+    setIsGrantingCoins(false);
+  };
+
+  // 코인 지급 처리
+  const handleGrantCoins = async () => {
+    if (!coinGrantModalUser) return;
+
+    const amount = parseInt(coinAmount);
+    if (!coinAmount || isNaN(amount) || amount <= 0) {
+      alert('❌ 지급할 코인 수량을 올바르게 입력해주세요. (양수만 가능)');
+      return;
+    }
+
+    if (!coinReason || !coinReason.trim()) {
+      alert('❌ 지급 사유를 입력해주세요.');
+      return;
+    }
+
+    // 확인 다이얼로그
+    const confirmMessage = `정말로 ${coinGrantModalUser.email}에게 ${amount.toLocaleString()} 코인을 지급하시겠습니까?\n\n사유: ${coinReason.trim()}\n\n이 작업은 되돌릴 수 없습니다.`;
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    setIsGrantingCoins(true);
+
+    try {
+      const response = await fetch('/api/admin/give-coins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: coinGrantModalUser.email,
+          amount: amount,
+          reason: coinReason.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert(
+          `✅ 코인 지급 완료!\n\n` +
+          `대상: ${data.data.email}\n` +
+          `지급 전: ${data.data.previousBalance.toLocaleString()} 코인\n` +
+          `지급량: +${data.data.amount.toLocaleString()} 코인\n` +
+          `지급 후: ${data.data.newBalance.toLocaleString()} 코인`
+        );
+        closeCoinGrantModal();
+        await fetchUsers(); // 목록 새로고침
+      } else {
+        alert('❌ ' + (data.message || '코인 지급에 실패했습니다.'));
+      }
+    } catch (error) {
+      console.error('코인 지급 오류:', error);
+      alert('❌ 코인 지급 중 오류가 발생했습니다.');
+    } finally {
+      setIsGrantingCoins(false);
     }
   };
 
@@ -322,61 +402,24 @@ export default function AdminUsersPage() {
   // 권한 오류 화면
   if (error && error.includes('권한')) {
     return (
-      <div className="min-h-screen bg-[#0B0B0B] text-white">
-        <header className="container mx-auto px-4 py-6 border-b border-[#D4AF37]/20">
-          <div className="flex items-center justify-between">
-            <a href={`/${locale}`} className="text-2xl font-bold" style={{ color: '#D4AF37' }}>
-              {t('common.siteName')}
-            </a>
-            <div />
-          </div>
-        </header>
-        <main className="container mx-auto px-4 py-16 max-w-lg">
+      <div className="text-white">
+        <div className="max-w-lg mx-auto py-16">
           <div className="p-8 rounded-2xl text-center" style={{ background: 'rgba(255,107,107,0.1)', border: '2px solid #FF6B6B' }}>
             <div className="text-5xl mb-4">🔒</div>
             <h1 className="text-2xl font-bold text-red-400 mb-4">접근 권한 없음</h1>
             <p className="text-gray-300 mb-6">{error}</p>
-            <a href={`/${locale}`} className="inline-block px-6 py-3 rounded-lg font-semibold text-black" style={{ backgroundColor: '#D4AF37' }}>
-              메인으로 돌아가기
-            </a>
+            <Link href={`/${locale}/admin`} className="inline-block px-6 py-3 rounded-lg font-semibold text-black" style={{ backgroundColor: '#D4AF37' }}>
+              관리자 메인으로 돌아가기
+            </Link>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0B0B0B] text-white">
-      {/* 헤더 */}
-      <header className="border-b border-[#D4AF37]/20 sticky top-0 bg-[#0B0B0B]/95 backdrop-blur-sm z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <a href={`/${locale}`} className="text-2xl font-bold" style={{ color: '#D4AF37' }}>
-                {t('common.siteName')}
-              </a>
-              <nav className="flex gap-4 items-center mt-2">
-                <span className="text-[#D4AF37] text-sm font-semibold">👥 유저 관리</span>
-                <span className="text-white/40">|</span>
-                <a href={`/${locale}/admin/counselors`} className="text-white/60 hover:text-white transition-colors text-sm">
-                  👔 상담사 관리
-                </a>
-                <span className="text-white/40">|</span>
-                <a href={`/${locale}/admin/requests`} className="text-white/60 hover:text-white transition-colors text-sm">
-                  📝 신청 관리
-                </a>
-                <span className="text-white/40">|</span>
-                <a href={`/${locale}/admin/payouts`} className="text-white/60 hover:text-white transition-colors text-sm">
-                  💰 정산 관리
-                </a>
-              </nav>
-            </div>
-            <div />
-          </div>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8 max-w-7xl">
+    <div className="text-white">
+      <div className="max-w-7xl mx-auto">
         {/* 통계 */}
         {stats && (
           <section className="grid grid-cols-3 gap-4 mb-8">
@@ -562,6 +605,17 @@ export default function AdminUsersPage() {
                                 </button>
                               )}
 
+                              {/* 코인 지급: SUPER만 표시 */}
+                              {currentAdminRole === 'SUPER' && (
+                                <button
+                                  onClick={() => openCoinGrantModal(user)}
+                                  disabled={isProcessing}
+                                  className="px-3 py-1 text-xs rounded bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 disabled:opacity-50"
+                                >
+                                  💰 코인 지급
+                                </button>
+                              )}
+
                               {/* 권한 설정: 이미 SUPER만 노출 */}
                               {currentAdminRole === 'SUPER' && (
                                 <button
@@ -594,7 +648,7 @@ export default function AdminUsersPage() {
             );
           })()
         )}
-      </main>
+      </div>
 
       {/* 권한 설정 모달 */}
       {roleModalUser && (
@@ -685,6 +739,98 @@ export default function AdminUsersPage() {
                 className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#D4AF37] text-black hover:bg-[#e2c15b] disabled:opacity-50"
               >
                 {isSavingRole ? '저장 중...' : '저장하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 코인 지급 모달 */}
+      {coinGrantModalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl bg-[#111111] border border-green-500/40 p-6">
+            <h2 className="text-xl font-bold mb-2" style={{ color: '#22C55E' }}>
+              💰 코인 지급
+            </h2>
+            <p className="text-sm text-gray-300 mb-4">
+              {coinGrantModalUser.displayName || coinGrantModalUser.email} 님에게 코인을 지급합니다.
+            </p>
+
+            {/* 현재 코인 잔액 표시 */}
+            <div className="mb-4 p-3 rounded-xl bg-white/5 border border-white/10">
+              <p className="text-xs text-gray-400 mb-1">현재 코인 잔액</p>
+              <p className="text-2xl font-bold" style={{ color: '#D4AF37' }}>
+                {coinGrantModalUser.coins.toLocaleString()} 코인
+              </p>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              {/* 코인 수량 입력 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  지급할 코인 수량 <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={coinAmount}
+                  onChange={(e) => setCoinAmount(e.target.value)}
+                  placeholder="예: 1000"
+                  className="w-full px-4 py-3 rounded-xl bg-black border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-green-500/50 transition-colors"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  양수만 입력 가능합니다.
+                </p>
+              </div>
+
+              {/* 지급 사유 입력 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  지급 사유 <span className="text-red-400">*</span>
+                </label>
+                <textarea
+                  value={coinReason}
+                  onChange={(e) => setCoinReason(e.target.value)}
+                  placeholder="예: 이벤트 보상, 버그 보상, 환불 처리 등"
+                  rows={3}
+                  className="w-full px-4 py-3 rounded-xl bg-black border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-green-500/50 transition-colors resize-none"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  지급 사유는 필수 입력 항목입니다. (로그에 기록됩니다)
+                </p>
+              </div>
+
+              {/* 예상 결과 미리보기 */}
+              {coinAmount && !isNaN(parseInt(coinAmount)) && parseInt(coinAmount) > 0 && (
+                <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/30">
+                  <p className="text-xs text-gray-400 mb-1">지급 후 예상 잔액</p>
+                  <p className="text-lg font-bold text-green-400">
+                    {(coinGrantModalUser.coins + parseInt(coinAmount)).toLocaleString()} 코인
+                    <span className="text-sm text-gray-400 ml-2">
+                      ({coinGrantModalUser.coins.toLocaleString()} + {parseInt(coinAmount).toLocaleString()})
+                    </span>
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={closeCoinGrantModal}
+                disabled={isGrantingCoins}
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-white/5 text-white/70 hover:bg-white/10 disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleGrantCoins}
+                disabled={isGrantingCoins || !coinAmount || !coinReason.trim()}
+                className="px-4 py-2 rounded-xl text-sm font-semibold bg-green-500 text-white hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isGrantingCoins ? '지급 중...' : '코인 지급하기'}
               </button>
             </div>
           </div>
