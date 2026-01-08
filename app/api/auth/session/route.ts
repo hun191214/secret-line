@@ -42,6 +42,7 @@ export async function GET() {
     // ★★★ DB에서 최신 사용자 정보 조회 ★★★
     let gender = session.gender || null;
     let displayName = session.email?.split('@')[0] || '사용자';
+    let nickname = session.nickname || null;
     let dbRole = session.role;
     let adminRole: string | null = session.adminRole || null;
     let isSessionValid = true;
@@ -69,6 +70,7 @@ export async function GET() {
           gender = user.gender || gender;
           dbRole = user.role;
           adminRole = user.adminRole || null;
+          nickname = user.nickname || nickname;
           
           // ★★★ getDisplayName 함수로 이름 결정 ★★★
           displayName = getDisplayName({
@@ -108,6 +110,7 @@ export async function GET() {
         counselorStatus: session.counselorStatus || 'offline',
         gender: gender || null,
         displayName: displayName || '사용자',
+        nickname: nickname || null,
       },
     };
     

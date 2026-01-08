@@ -9,6 +9,7 @@ interface User {
   email: string;
   role: string;
   userId?: string;
+  nickname?: string | null;
 }
 
 interface CounselorProfile {
@@ -126,7 +127,7 @@ export default function Header() {
           ) : user ? (
             <>
               <span className="text-white/80 text-sm hidden sm:inline">
-                {user.email}
+                👤 {user.nickname || '익명 사용자'} 님
               </span>
               <a
                 href={`/${locale}/mypage`}
