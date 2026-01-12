@@ -12,10 +12,10 @@ const intlMiddleware = createMiddleware({
 export default function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // ✅ / 는 글로벌 랜딩 유지
+  // / 는 글로벌 랜딩 유지
   if (pathname === "/") return NextResponse.next();
 
-  // ✅ 정적/내부 경로 제외
+  // 내부/정적 경로 제외
   if (
     pathname.startsWith("/api") ||
     pathname.startsWith("/_next") ||
