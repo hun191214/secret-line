@@ -1,12 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma, ensurePrismaConnected } from '@/lib/prisma';
-
-/**
- * 현재 코인 잔액 조회 API (DB에서 실시간 조회)
- * 
- * ⚠️ 주의: Prisma 6.2.0 버전 유지 필수
- */
 export async function GET() {
   // 캐시 제어 헤더
   const noCacheHeaders = {
@@ -14,19 +8,16 @@ export async function GET() {
     'Pragma': 'no-cache',
     'Expires': '0',
   };
-
   try {
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('auth_session');
-
     if (!sessionCookie) {
       return NextResponse.json({
         success: false,
         authenticated: false,
-        coins: 0,
+        milliGold: 0,
       }, { headers: noCacheHeaders });
     }
-
     let session;
     try {
       const cookieValue = sessionCookie.value.trim();
@@ -39,67 +30,58 @@ export async function GET() {
       return NextResponse.json({
         success: false,
         authenticated: false,
-        coins: 0,
+        milliGold: 0,
         error: 'INVALID_SESSION_COOKIE',
       }, { headers: noCacheHeaders });
     }
-
     const userEmail = session.email;
+    let userMilliGold;
     if (!userEmail) {
       return NextResponse.json({
-        success: false,
         authenticated: false,
-        coins: 0,
+        milliGold: 0,
       }, { headers: noCacheHeaders });
     }
-
     // DB 연결 확인
     const dbConnected = await ensurePrismaConnected();
     if (!dbConnected) {
-      // DB 연결 실패 시 세션의 코인 값 반환 (fallback)
-      console.warn(`[잔액 조회] DB 연결 실패, 세션 값 사용: ${session.coins || 0}`);
+      console.warn(`[잔액 조회] DB 연결 실패, 세션 값 사용: ${session.milliGold || 0}`);
       return NextResponse.json({
         success: true,
         authenticated: true,
-        coins: session.coins || 0,
+        milliGold: session.milliGold || 0,
         source: 'session',
       }, { headers: noCacheHeaders });
     }
-
-    // DB에서 최신 코인 잔액 조회
+    // DB에서 최신 milliGold 잔액 조회
     let user;
     try {
       user = await prisma.user.findUnique({
         where: { email: userEmail },
-        select: { coins: true },
+        select: { milliGold: true },
       });
     } catch (dbError: any) {
       console.error(`[잔액 조회] DB 조회 실패: ${dbError?.message}`);
-      // DB 조회 실패 시 세션의 코인 값 반환 (fallback)
       return NextResponse.json({
         success: true,
         authenticated: true,
-        coins: session.coins || 0,
+        milliGold: session.milliGold || 0,
         source: 'session',
       }, { headers: noCacheHeaders });
     }
-
     if (!user) {
       return NextResponse.json({
         success: false,
         authenticated: true,
-        coins: 0,
+        milliGold: 0,
         message: '사용자를 찾을 수 없습니다.',
       }, { headers: noCacheHeaders });
     }
-
-    const userCoins = user.coins ?? 0;
-    // console.log 제거 (JSON 응답 간섭 방지)
-
+    userMilliGold = user.milliGold ?? 0;
     // 세션 쿠키도 업데이트 (동기화)
     cookieStore.set('auth_session', JSON.stringify({
       ...session,
-      coins: userCoins,
+      milliGold: userMilliGold,
     }), {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -107,20 +89,18 @@ export async function GET() {
       maxAge: 60 * 60 * 24 * 7,
       path: '/',
     });
-
     return NextResponse.json({
       success: true,
       authenticated: true,
-      coins: userCoins,
+      milliGold: userMilliGold,
       source: 'database',
     }, { headers: noCacheHeaders });
-
   } catch (error: any) {
     console.error(`[잔액 조회] 예상치 못한 오류: ${error?.message}`);
     return NextResponse.json({
       success: false,
       authenticated: false,
-      coins: 0,
+      milliGold: 0,
     }, { headers: noCacheHeaders });
   }
 }

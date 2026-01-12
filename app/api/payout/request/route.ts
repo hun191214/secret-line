@@ -17,9 +17,9 @@ import { prisma, ensurePrismaConnected } from '@/lib/prisma';
 export const runtime = 'nodejs';
 
 // ★★★ 시스템 상수 ★★★
-const COIN_TO_USDT_RATE = 100; // 100 코인 = 1 USDT
+const MILLI_GOLD_TO_USDT_RATE = 100000; // 100,000 milliGold = 1 USDT (100 Gold = 1 USDT)
 const AUTO_APPROVAL_THRESHOLD_USDT = 50; // 50 USDT 이하 자동 승인
-const MIN_WITHDRAWAL_COINS = 100; // 최소 출금 코인 (1 USDT)
+const MIN_WITHDRAWAL_MILLI_GOLD = 100000; // 최소 출금 milliGold (1 USDT)
 
 // 지원되는 네트워크 (입금 시스템과 동일하게 TRC-20 전용)
 const SUPPORTED_NETWORKS = ['TRC-20'];
@@ -82,19 +82,19 @@ export async function POST(request: NextRequest) {
 
     // 요청 본문 파싱
     const body = await request.json();
-    const { coinAmount, walletAddress, network } = body;
+    const { milliGold, walletAddress, network } = body;
 
     // ★★★ 필수 필드 검증 ★★★
-    if (!coinAmount || coinAmount <= 0) {
+    if (!milliGold || milliGold <= 0) {
       return NextResponse.json(
-        { success: false, message: '올바른 출금 코인 수량을 입력해주세요.' },
+        { success: false, message: '올바른 출금 금액(milliGold)을 입력해주세요.' },
         { status: 400 }
       );
     }
 
-    if (coinAmount < MIN_WITHDRAWAL_COINS) {
+    if (milliGold < MIN_WITHDRAWAL_MILLI_GOLD) {
       return NextResponse.json(
-        { success: false, message: `최소 ${MIN_WITHDRAWAL_COINS} 코인 이상부터 출금 가능합니다. (1 USDT 이상)` },
+        { success: false, message: `최소 ${MIN_WITHDRAWAL_MILLI_GOLD/1000} Gold(1 USDT) 이상부터 출금 가능합니다.` },
         { status: 400 }
       );
     }
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
       where: { id: session.userId },
       select: {
         id: true,
-        coins: true,
+        milliGold: true,
         role: true,
         counselorProfile: {
           select: { status: true },
@@ -144,18 +144,18 @@ export async function POST(request: NextRequest) {
     }
 
     // 잔액 검증
-    if (user.coins < coinAmount) {
+    if (user.milliGold < milliGold) {
       return NextResponse.json(
         { 
           success: false, 
-          message: `잔액이 부족합니다. (보유: ${user.coins}코인, 신청: ${coinAmount}코인)` 
+          message: `잔액이 부족합니다. (보유: ${(user.milliGold/1000).toLocaleString()} Gold, 신청: ${(milliGold/1000).toLocaleString()} Gold)` 
         },
         { status: 400 }
       );
     }
 
     // ★★★ 서버에서 USDT 금액 재계산 (보안 강화) ★★★
-    const usdtAmount = coinAmount / COIN_TO_USDT_RATE;
+    const usdtAmount = milliGold / MILLI_GOLD_TO_USDT_RATE;
 
     // ★★★ 핵심 로직: 50 USDT 이하 자동 승인 ★★★
     const isAutoApproval = usdtAmount <= AUTO_APPROVAL_THRESHOLD_USDT;
@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
       const withdrawalRequest = await tx.withdrawalRequest.create({
         data: {
           userId: session.userId,
-          coinAmount,
+          milliGold,
           usdtAmount,
           walletAddress: walletAddress.trim(),
           network: selectedNetwork, // TRC-20 전용
@@ -176,12 +176,12 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // 2. 자동 승인 시 코인 즉시 차감
+      // 2. 자동 승인 시 milliGold 즉시 차감
       if (isAutoApproval) {
         await tx.user.update({
           where: { id: session.userId },
           data: {
-            coins: { decrement: coinAmount },
+            milliGold: { decrement: milliGold },
           },
         });
       }
@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
       return withdrawalRequest;
     });
 
-    console.log(`✅ [USDT 출금] ${session.email || session.userId}: ${coinAmount}코인 → ${usdtAmount} USDT (${selectedNetwork}) [${status}]`);
+    console.log(`✅ [USDT 출금] ${session.email || session.userId}: ${(milliGold/1000).toLocaleString()} Gold → ${usdtAmount} USDT (${selectedNetwork}) [${status}]`);
 
     return NextResponse.json({
       success: true,
@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
         : `${usdtAmount.toFixed(2)} USDT 출금 신청이 접수되었습니다. 관리자 승인 후 송금됩니다.`,
       withdrawal: {
         id: result.id,
-        coinAmount: result.coinAmount,
+        milliGold: result.milliGold,
         usdtAmount: result.usdtAmount,
         network: result.network,
         status: result.status,
@@ -220,9 +220,9 @@ export async function GET() {
   return NextResponse.json({
     success: true,
     rate: {
-      coinToUsdt: COIN_TO_USDT_RATE,
+      milliGoldToUsdt: MILLI_GOLD_TO_USDT_RATE,
       autoApprovalThreshold: AUTO_APPROVAL_THRESHOLD_USDT,
-      minWithdrawalCoins: MIN_WITHDRAWAL_COINS,
+      minWithdrawalMilliGold: MIN_WITHDRAWAL_MILLI_GOLD,
       supportedNetworks: SUPPORTED_NETWORKS,
     },
   });

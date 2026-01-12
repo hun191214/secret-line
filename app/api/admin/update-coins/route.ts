@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       select: {
         id: true,
         email: true,
-        coins: true,
+        milliGold: true,
         name: true,
         role: true,
       },
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log(`[코인 조회] ${email}: ${user.coins} 코인`);
+    console.log(`[잔액 조회] ${email}: ${user.milliGold} (milliGold)`);
 
     return NextResponse.json({
       success: true,
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
         email: user.email,
         name: user.name,
         role: user.role,
-        coins: user.coins,
+        milliGold: user.milliGold,
       },
     });
   } catch (error: any) {
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, coins } = body;
+    const { email, milliGold } = body;
 
     // 입력 검증
     if (!email) {
@@ -83,9 +83,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (typeof coins !== 'number' || isNaN(coins)) {
+    if (typeof milliGold !== 'number' || isNaN(milliGold)) {
       return NextResponse.json(
-        { success: false, message: '유효한 코인 수량을 입력해주세요.' },
+        { success: false, message: '유효한 milliGold 값을 입력해주세요.' },
         { status: 400 }
       );
     }
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
       select: {
         id: true,
         email: true,
-        coins: true,
+        milliGold: true,
         name: true,
         role: true,
       },
@@ -123,27 +123,27 @@ export async function POST(request: NextRequest) {
     const updatedUser = await prisma.user.update({
       where: { email },
       data: {
-        coins: coins,
+        milliGold: milliGold,
       },
       select: {
         id: true,
         email: true,
-        coins: true,
+        milliGold: true,
         name: true,
         role: true,
       },
     });
 
-    console.log(`[코인 업데이트] ${email}: ${user.coins} → ${updatedUser.coins} 코인`);
+    console.log(`[잔액 업데이트] ${email}: ${user.milliGold} → ${updatedUser.milliGold} (milliGold)`);
 
     return NextResponse.json({
       success: true,
-      message: `코인이 ${updatedUser.coins} 코인으로 업데이트되었습니다.`,
+      message: `잔액이 ${updatedUser.milliGold} (milliGold)로 업데이트되었습니다.`,
       user: {
         email: updatedUser.email,
         name: updatedUser.name,
         role: updatedUser.role,
-        coins: updatedUser.coins,
+        milliGold: updatedUser.milliGold,
       },
     });
   } catch (error: any) {

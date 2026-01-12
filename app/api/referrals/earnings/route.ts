@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     const earnings = referrals.map((referral) => {
       const totalEarnings = referral.calls.reduce((sum, call) => {
         const settlement = call.settlements.find((s) => s.type === 'REFERRER');
-        return sum + (settlement?.amount || 0);
+        return sum + (settlement?.milliGold || 0);
       }, 0);
 
       return {

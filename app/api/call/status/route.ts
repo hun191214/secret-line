@@ -145,11 +145,11 @@ export async function GET(request: NextRequest) {
           status: 'COMPLETED',
         },
         _sum: {
-          amount: true,
+          milliGold: true,
         },
       });
 
-      const counselorMilliAmountSum = amountSumResult._sum.amount || 0;
+      const counselorMilliAmountSum = amountSumResult._sum.milliGold || 0;
       if (counselorMilliAmountSum > 0) {
         totalMilliGifts = Math.round(counselorMilliAmountSum / COUNSELOR_RATE);
       }

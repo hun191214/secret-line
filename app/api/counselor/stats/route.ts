@@ -119,21 +119,21 @@ export async function GET() {
             gte: today,
             lt: tomorrow,
           },
-          // 15초 미만 통화는 cost가 0이므로 필터링
-          cost: {
-            gt: 0, // cost > 0인 통화만 (15초 이상 통화)
+          // 15초 미만 통화는 milliCost가 0이므로 필터링
+          milliCost: {
+            gt: 0, // milliCost > 0인 통화만 (15초 이상 통화)
           },
         },
         select: {
           duration: true,
-          cost: true, // cost 필드도 확인
+          milliCost: true, // milliCost 필드도 확인
         },
       });
 
       // 상담 수익 계산: 분당 14코인, 60% 배분
       // ★★★ cost > 0인 통화만 계산 (15초 미만 통화는 cost = 0) ★★★
       consultationMilliEarnings = todayCalls.reduce((sum, call) => {
-        if (!call.cost || call.cost === 0) {
+        if (!call.milliCost || call.milliCost === 0) {
           return sum;
         }
         const durationSeconds = call.duration || 0;
@@ -167,11 +167,11 @@ export async function GET() {
           },
         },
         _sum: {
-          amount: true,
+          milliGold: true,
         },
       });
 
-      const counselorGiftMilliSum = giftSettlements._sum.amount || 0;
+      const counselorGiftMilliSum = giftSettlements._sum.milliGold || 0;
       // milliGold 단위 그대로 사용
       giftMilliEarnings = counselorGiftMilliSum;
       console.log(`🎁 [상담사 통계] ${userEmail}: 선물 수익 ${giftMilliEarnings} milliGold (상담사가 받은 60% 금액)`);

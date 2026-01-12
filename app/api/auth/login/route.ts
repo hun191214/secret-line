@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
           adminRole: true, // ★★★ adminRole 추가 ★★★
           nickname: true, // ★★★ nickname 추가 ★★★
           password: true,
-          coins: true, // 코인 잔액도 함께 조회
+          milliGold: true, // 잔액(milliGold)도 함께 조회
         },
       });
     } catch (dbError: any) {
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
       role: user.role,
       adminRole: user.adminRole || null, // ★★★ adminRole 추가 ★★★
       nickname: user.nickname || null, // ★★★ nickname 추가 ★★★
-      coins: user.coins || 0,
+      milliGold: user.milliGold || 0,
       loginTime: loginTime,
       sessionId: newSessionId, // DB와 동일한 세션 ID
     }), {

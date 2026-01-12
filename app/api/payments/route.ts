@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     const payment = await prisma.payment.create({
       data: {
         userId,
-        amount,
+        milliAmount: amount,
         currency,
         paymentId: paymentData.payment_id,
         status: 'PENDING',

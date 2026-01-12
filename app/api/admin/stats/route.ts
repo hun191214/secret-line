@@ -61,7 +61,7 @@ export async function GET() {
           },
         },
         _sum: {
-          amount: true,
+          milliAmount: true,
         },
       });
       console.log('[Admin Stats API] 쿼리 1/5: Payment aggregate 완료:', todayPayments);
@@ -87,18 +87,18 @@ export async function GET() {
             },
           },
           _sum: {
-            amount: true,
+            milliGold: true,
           },
         });
       } else {
         // 테이블이 비어있으면 기본값
-        todayCompanySettlements = { _sum: { amount: null } };
+        todayCompanySettlements = { _sum: { milliGold: null } };
       }
       console.log('[Admin Stats API] 쿼리 2/5: Settlement aggregate 완료:', todayCompanySettlements);
     } catch (e) {
       // Settlement 쿼리 실패 시 0으로 처리 (테이블 미존재 등)
       console.error('[Admin Stats API] 쿼리 2/5: Settlement aggregate 실패 (0으로 처리):', e);
-      todayCompanySettlements = { _sum: { amount: null } };
+      todayCompanySettlements = { _sum: { milliGold: null } };
     }
 
     // 3. 현재 진행 중인 통화 수
@@ -150,9 +150,9 @@ export async function GET() {
 
     const stats = {
       todayRevenue: {
-        payments: todayPayments._sum.amount || 0,
-        settlements: todayCompanySettlements._sum.amount || 0,
-        total: (todayPayments._sum.amount || 0) + (todayCompanySettlements._sum.amount || 0),
+        payments: todayPayments._sum.milliAmount || 0,
+        settlements: todayCompanySettlements._sum.milliGold || 0,
+        total: (todayPayments._sum.milliAmount || 0) + (todayCompanySettlements._sum.milliGold || 0),
       },
       activeCalls: {
         count: activeCallsCount,

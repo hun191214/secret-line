@@ -109,7 +109,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { role, coins } = body;
+    const { role, milliGold } = body;
 
     // 유저 존재 확인
     const user = await prisma.user.findUnique({
@@ -139,8 +139,8 @@ export async function PATCH(
       updateData.role = role;
     }
 
-    if (typeof coins === 'number' && coins >= 0) {
-      updateData.coins = coins;
+    if (typeof milliGold === 'number' && milliGold >= 0) {
+      updateData.milliGold = milliGold;
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -153,7 +153,7 @@ export async function PATCH(
     const updatedUser = await prisma.user.update({
       where: { id },
       data: updateData,
-      select: { email: true, role: true, coins: true },
+      select: { email: true, role: true, milliGold: true },
     });
 
     console.log(`✏️ [관리자] 유저 수정: ${user.email}`, updateData);

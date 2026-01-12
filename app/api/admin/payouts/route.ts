@@ -43,7 +43,18 @@ export async function GET(request: NextRequest) {
     // 출금 신청 목록 조회
     const withdrawals = await prisma.withdrawalRequest.findMany({
       where: whereClause,
-      include: {
+      select: {
+        id: true,
+        userId: true,
+        milliGold: true,
+        usdtAmount: true,
+        walletAddress: true,
+        network: true,
+        status: true,
+        rejectedReason: true,
+        txHash: true,
+        requestedAt: true,
+        processedAt: true,
         user: {
           select: {
             id: true,
@@ -87,7 +98,7 @@ export async function GET(request: NextRequest) {
         userEmail: w.user.email,
         userName: w.user.name,
         displayName: w.user.counselorProfile?.displayName,
-        milliGoldAmount: w.milliGoldAmount,
+        milliGold: w.milliGold,
         usdtAmount: w.usdtAmount,
         walletAddress: w.walletAddress,
         network: w.network,

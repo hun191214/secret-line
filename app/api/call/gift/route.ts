@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`🎁 [선물] ${userEmail}이 ${amount}코인 선물 시도 (통화: ${callId})`);
+    console.log(`🎁 [선물] ${userEmail}이 ${milliAmount} milliGold 선물 시도 (통화: ${callId})`);
 
     // 5. 통화 정보 조회 (추천인 정보 포함)
     let call;
@@ -138,14 +138,14 @@ export async function POST(request: NextRequest) {
             select: {
               id: true,
               email: true,
-              coins: true,
+              milliGold: true,
             },
           },
           counselor: {
             select: {
               id: true,
               email: true,
-              coins: true,
+              milliGold: true,
               name: true,
             },
           },
@@ -242,11 +242,11 @@ export async function POST(request: NextRequest) {
       console.log(`🎁 [선물] 추천인 없음 (6:4 배분)`);
     }
 
-    console.log(`🎁 [선물 배분 상세] 총액: ${amount}코인`);
-    console.log(`   → 상담사(${call.counselor.email || 'unknown'}): ${counselorAmount}코인 (60%)`);
-    console.log(`   → 플랫폼: ${platformAmount}코인 (${hasReferrer ? '30%' : '40%'})`);
+    console.log(`🎁 [선물 배분 상세] 총액: ${milliAmount} milliGold`);
+    console.log(`   → 상담사(${call.counselor.email || 'unknown'}): ${counselorMilliAmount} milliGold (60%)`);
+    console.log(`   → 플랫폼: ${platformMilliAmount} milliGold (${hasReferrer ? '30%' : '40%'})`);
     if (hasReferrer && referrerId) {
-      console.log(`   → 추천인(${referrerId}): ${referrerAmount}코인 (10%)`);
+      console.log(`   → 추천인(${referrerId}): ${referrerMilliAmount} milliGold (10%)`);
     }
 
     // 12. 트랜잭션으로 선물 처리 (하나의 묶음으로 실행)
@@ -285,7 +285,7 @@ export async function POST(request: NextRequest) {
           data: {
             userId: call.counselorId,
             callId: callId,
-            amount: counselorMilliAmount,
+            milliGold: counselorMilliAmount,
             type: 'COUNSELOR',
             percentage: COUNSELOR_RATE,
             status: 'COMPLETED',
@@ -312,7 +312,7 @@ export async function POST(request: NextRequest) {
             data: {
               userId: referrerId,
               callId: callId,
-              amount: referrerMilliAmount,
+              milliGold: referrerMilliAmount,
               type: 'REFERRER',
               percentage: REFERRER_RATE,
               status: 'COMPLETED',
@@ -328,7 +328,7 @@ export async function POST(request: NextRequest) {
           data: {
             userId: call.counselorId, // 플랫폼 수익은 상담사 ID를 참조 (시스템 정산용)
             callId: callId,
-            amount: platformMilliAmount,
+            milliGold: platformMilliAmount,
             type: 'COMPANY',
             percentage: hasReferrer ? PLATFORM_RATE_WITH_REFERRER : PLATFORM_RATE_NO_REFERRER,
             status: 'COMPLETED',
@@ -359,10 +359,10 @@ export async function POST(request: NextRequest) {
       console.error(`      - callerId: ${call.callerId}`);
       console.error(`      - counselorId: ${call.counselorId}`);
       console.error(`      - referrerId: ${referrerId || 'null'}`);
-      console.error(`      - amount: ${amount}`);
-      console.error(`      - counselorAmount: ${counselorAmount}`);
-      console.error(`      - platformAmount: ${platformAmount}`);
-      console.error(`      - referrerAmount: ${referrerAmount}`);
+      console.error(`      - milliAmount: ${milliAmount}`);
+      console.error(`      - counselorMilliAmount: ${counselorMilliAmount}`);
+      console.error(`      - platformMilliAmount: ${platformMilliAmount}`);
+      console.error(`      - referrerMilliAmount: ${referrerMilliAmount}`);
       
       return NextResponse.json(
         { success: false, message: '선물 처리 중 오류가 발생했습니다.' },

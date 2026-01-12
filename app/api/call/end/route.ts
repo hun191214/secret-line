@@ -96,14 +96,14 @@ export async function POST(request: NextRequest) {
             select: {
               id: true,
               email: true,
-              coins: true,
+              milliGold: true,
             },
           },
           counselor: {
             select: {
               id: true,
               email: true,
-              coins: true,
+              milliGold: true,
             },
           },
         },
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
             status: 'ENDED',
             endedAt,
             duration,
-            cost: 0, // 과금 없음
+            milliCost: 0, // 과금 없음
           },
         });
       } catch (dbError: any) {
@@ -166,8 +166,8 @@ export async function POST(request: NextRequest) {
           status: 'ENDED',
           duration,
           durationMinutes: 0,
-          cost: 0,
-          coinsDeducted: 0,
+          milliCost: 0,
+          milliGoldDeducted: 0,
           counselorEarnings: 0,
           platformEarnings: 0,
           noBilling: true,
@@ -195,6 +195,7 @@ export async function POST(request: NextRequest) {
     console.log(`   → 플랫폼 수익: ${platformMilliEarnings} milliGold (40%)`);
 
     // 10. 트랜잭션으로 과금 및 종료 처리
+    const milliCost = totalMilliGoldToDeduct;
     try {
       await prisma.$transaction([
         // 1. 이용자 잔액 차감
@@ -222,7 +223,7 @@ export async function POST(request: NextRequest) {
             status: 'ENDED',
             endedAt,
             duration,
-            cost: costUSD,
+            milliCost: milliCost,
           },
         }),
       ]);
@@ -241,7 +242,7 @@ export async function POST(request: NextRequest) {
             status: 'ENDED',
             endedAt,
             duration,
-            cost: costUSD,
+            milliCost: milliCost,
           },
         });
         console.warn(`⚠️ [통화 종료] 과금 실패했지만 통화는 종료 처리됨`);
@@ -271,10 +272,10 @@ export async function POST(request: NextRequest) {
         status: 'ENDED',
         duration,
         durationMinutes,
-        cost: costUSD,
-        coinsDeducted: actualDeduction,
-        counselorEarnings,
-        platformEarnings,
+        milliCost: milliCost,
+        milliGoldDeducted: actualMilliDeduction,
+        counselorEarnings: counselorMilliEarnings,
+        platformEarnings: platformMilliEarnings,
       },
     }, { headers: noCacheHeaders });
 

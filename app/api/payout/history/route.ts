@@ -77,9 +77,9 @@ export async function GET() {
       totalUsdtAmount: withdrawals
         .filter((w) => w.status !== 'REJECTED')
         .reduce((sum, w) => sum + w.usdtAmount, 0),
-      totalCoinAmount: withdrawals
+      totalMilliGold: withdrawals
         .filter((w) => w.status !== 'REJECTED')
-        .reduce((sum, w) => sum + w.coinAmount, 0),
+        .reduce((sum, w) => sum + w.milliGold, 0),
       pendingCount: withdrawals.filter((w) => w.status === 'PENDING').length,
       completedCount: withdrawals.filter(
         (w) => w.status === 'AUTO_COMPLETED' || w.status === 'MANUAL_COMPLETED'
@@ -90,7 +90,7 @@ export async function GET() {
       success: true,
       withdrawals: withdrawals.map((w) => ({
         id: w.id,
-        coinAmount: w.coinAmount,
+        milliGold: w.milliGold,
         usdtAmount: w.usdtAmount,
         walletAddress: w.walletAddress.slice(0, 8) + '...' + w.walletAddress.slice(-6), // 마스킹
         walletAddressFull: w.walletAddress, // 전체 주소 (본인 확인용)

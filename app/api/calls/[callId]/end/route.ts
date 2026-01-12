@@ -45,7 +45,7 @@ export async function POST(
         status: 'ENDED',
         endedAt,
         duration: durationSeconds,
-        cost: settlement.totalCost,
+        milliCost: settlement.totalCost,
       },
     });
 
@@ -78,7 +78,7 @@ async function createSettlements(
       data: {
         userId: call.counselorId,
         callId,
-        amount: settlement.counselor,
+        milliGold: settlement.counselor,
         type: 'COUNSELOR',
         percentage: 0.6,
       },
@@ -92,7 +92,7 @@ async function createSettlements(
         data: {
           userId: call.referral.referrerId,
           callId,
-          amount: settlement.referrerAmount,
+          milliGold: settlement.referrerAmount,
           type: 'REFERRER',
           percentage: 0.1,
         },
@@ -110,7 +110,7 @@ async function createSettlements(
       data: {
         userId: companyUserId,
         callId,
-        amount: settlement.company,
+        milliGold: settlement.company,
         type: 'COMPANY',
         percentage: companyPercentage,
       },

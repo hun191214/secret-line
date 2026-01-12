@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
         role: true,
         adminRole: true,
         gender: true,
-        coins: true,
+        milliGold: true,
         status: true,
         createdAt: true,
         counselorProfile: {
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
         role: u.role,
         adminRole: u.adminRole,
         gender: u.gender,
-        coins: u.coins,
+        milliGold: u.milliGold,
         status: u.status,
         counselorStatus: u.counselorProfile?.status,
         country: u.counselorProfile?.country,

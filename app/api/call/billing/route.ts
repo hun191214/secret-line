@@ -50,14 +50,14 @@ export async function POST() {
             select: {
               id: true,
               email: true,
-              coins: true,
+              milliGold: true,
             },
           },
           counselor: {
             select: {
               id: true,
               email: true,
-              coins: true,
+              milliGold: true,
             },
           },
         },
@@ -154,20 +154,20 @@ async function processCallBilling(call: any) {
   }
 
   // 과금할 코인 계산
-  const coinsToDeduct = minutesToBill * COST_PER_MINUTE;
-  const counselorEarnings = Math.floor(coinsToDeduct * COUNSELOR_SHARE * 10) / 10; // 8.4코인
-  const platformEarnings = Math.floor(coinsToDeduct * PLATFORM_SHARE * 10) / 10; // 5.6코인
+  const milliGoldToDeduct = minutesToBill * COST_PER_MINUTE;
+  const counselorEarnings = Math.floor(milliGoldToDeduct * COUNSELOR_SHARE * 10) / 10; // 8.4 milliGold
+  const platformEarnings = Math.floor(milliGoldToDeduct * PLATFORM_SHARE * 10) / 10; // 5.6 milliGold
 
   // 이용자 잔액 확인
-  const callerCoins = caller.coins ?? 0;
+  const callerMilliGold = caller.milliGold ?? 0;
 
   console.log(`💰 [과금] 통화 ${callId}:`);
   console.log(`   → 경과 시간: ${elapsedMinutes}분 (${elapsedSeconds}초)`);
-  console.log(`   → 이번 과금: ${minutesToBill}분 = ${coinsToDeduct}코인`);
-  console.log(`   → 이용자 잔액: ${callerCoins}코인`);
+  console.log(`   → 이번 과금: ${minutesToBill}분 = ${milliGoldToDeduct} milliGold`);
+  console.log(`   → 이용자 잔액: ${callerMilliGold} milliGold`);
 
   // 잔액 부족 체크
-  if (callerCoins < coinsToDeduct) {
+  if (callerMilliGold < milliGoldToDeduct) {
     console.log(`⚠️ [과금] 잔액 부족으로 통화 강제 종료: ${callId}`);
     
     // 통화 강제 종료
@@ -178,7 +178,7 @@ async function processCallBilling(call: any) {
           status: 'ENDED',
           endedAt: now,
           duration: elapsedSeconds,
-          cost: (lastBilledMinutes * COST_PER_MINUTE) / 100, // USD로 변환
+          milliCost: lastBilledMinutes * COST_PER_MINUTE, // 1/1000 Gold 단위 정수
         },
       });
     } catch (endError: any) {
@@ -190,8 +190,8 @@ async function processCallBilling(call: any) {
       success: true,
       ended: true,
       reason: '잔액 부족',
-      callerCoins,
-      requiredCoins: coinsToDeduct,
+      callerMilliGold,
+      requiredMilliGold: milliGoldToDeduct,
     };
   }
 
@@ -202,8 +202,8 @@ async function processCallBilling(call: any) {
       prisma.user.update({
         where: { id: callerId },
         data: {
-          coins: {
-            decrement: coinsToDeduct,
+          milliGold: {
+            decrement: milliGoldToDeduct,
           },
         },
       }),
@@ -211,7 +211,7 @@ async function processCallBilling(call: any) {
       prisma.user.update({
         where: { id: counselorId },
         data: {
-          coins: {
+          milliGold: {
             increment: Math.floor(counselorEarnings),
           },
         },
@@ -221,25 +221,25 @@ async function processCallBilling(call: any) {
         where: { id: callId },
         data: {
           duration: elapsedMinutes * 60, // 과금된 분까지의 초
-          cost: (elapsedMinutes * COST_PER_MINUTE) / 100, // USD로 변환
+          milliCost: elapsedMinutes * COST_PER_MINUTE, // 1/1000 Gold 단위 정수
         },
       }),
     ]);
 
     console.log(`✅ [과금] 통화 ${callId} 과금 완료:`);
-    console.log(`   → 이용자 차감: ${coinsToDeduct}코인`);
-    console.log(`   → 상담사 수익: ${counselorEarnings}코인 (60%)`);
-    console.log(`   → 플랫폼 수익: ${platformEarnings}코인 (40%)`);
+    console.log(`   → 이용자 차감: ${milliGoldToDeduct} milliGold`);
+    console.log(`   → 상담사 수익: ${counselorEarnings} milliGold (60%)`);
+    console.log(`   → 플랫폼 수익: ${platformEarnings} milliGold (40%)`);
 
     return {
       callId,
       success: true,
       billed: true,
       minutesBilled: minutesToBill,
-      coinsDeducted: coinsToDeduct,
+      milliGoldDeducted: milliGoldToDeduct,
       counselorEarnings,
       platformEarnings,
-      callerNewBalance: callerCoins - coinsToDeduct,
+      callerNewBalance: callerMilliGold - milliGoldToDeduct,
     };
   } catch (txError: any) {
     console.error(`[과금] 트랜잭션 오류: ${txError?.message}`);
@@ -277,13 +277,13 @@ export async function GET() {
         caller: {
           select: {
             email: true,
-            coins: true,
+            milliGold: true,
           },
         },
         counselor: {
           select: {
             email: true,
-            coins: true,
+            milliGold: true,
           },
         },
       },
@@ -297,9 +297,9 @@ export async function GET() {
         startedAt: call.startedAt,
         duration: call.duration,
         callerEmail: call.caller.email,
-        callerCoins: call.caller.coins,
+        callerMilliGold: call.caller.milliGold,
         counselorEmail: call.counselor.email,
-        counselorCoins: call.counselor.coins,
+        counselorMilliGold: call.counselor.milliGold,
       })),
     }, { headers: noCacheHeaders });
 

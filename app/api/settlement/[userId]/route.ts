@@ -29,12 +29,12 @@ export async function GET(
       },
     });
 
-    const totalAmount = settlements.reduce((sum, s) => sum + s.amount, 0);
+    const totalMilliGold = settlements.reduce((sum, s) => sum + s.milliGold, 0);
 
     return NextResponse.json({
       userId,
       settlements,
-      totalAmount,
+      totalMilliGold,
       count: settlements.length,
     }, { status: 200 });
   } catch (error: any) {
