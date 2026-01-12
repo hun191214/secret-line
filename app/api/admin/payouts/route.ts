@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
         userEmail: w.user.email,
         userName: w.user.name,
         displayName: w.user.counselorProfile?.displayName,
-        coinAmount: w.coinAmount,
+        milliGoldAmount: w.milliGoldAmount,
         usdtAmount: w.usdtAmount,
         walletAddress: w.walletAddress,
         network: w.network,

@@ -12,16 +12,16 @@ interface CoinLog {
   grantedBy: string;
   recipientEmail: string;
   recipientName: string;
-  amount: number;
+  milliAmount: number; // 1/1000 Gold 단위
   reason: string;
-  previousBalance: number;
-  newBalance: number;
+  previousMilliGold: number; // 1/1000 Gold 단위
+  newMilliGold: number; // 1/1000 Gold 단위
 }
 
 interface Stats {
-  totalAmount: number;
+  totalMilliAmount: number; // 1/1000 Gold 단위
   totalCount: number;
-  todayAmount: number;
+  todayMilliAmount: number; // 1/1000 Gold 단위
   todayCount: number;
 }
 
@@ -66,9 +66,19 @@ export default function CoinLogsPage() {
       const data = await response.json();
 
       if (data.success) {
-        setLogs(data.logs || []);
+        // 서버 응답이 coins 기반이면 변환 필요 (예: amount → milliAmount = amount * 1000)
+        setLogs((data.logs || []).map((log: any) => ({
+          ...log,
+          milliAmount: log.amount !== undefined ? log.amount * 1000 : 0,
+          previousMilliGold: log.previousBalance !== undefined ? log.previousBalance * 1000 : 0,
+          newMilliGold: log.newBalance !== undefined ? log.newBalance * 1000 : 0,
+        })));
         setPagination(data.pagination);
-        setStats(data.stats || null);
+        setStats(data.stats ? {
+          ...data.stats,
+          totalMilliAmount: data.stats.totalAmount !== undefined ? data.stats.totalAmount * 1000 : 0,
+          todayMilliAmount: data.stats.todayAmount !== undefined ? data.stats.todayAmount * 1000 : 0,
+        } : null);
       } else {
         setError(data.message || '코인 지급 내역을 불러오는데 실패했습니다.');
       }
@@ -163,7 +173,7 @@ export default function CoinLogsPage() {
               }}
             >
               <p className="text-xs text-emerald-400/70 mb-1">전체 지급량</p>
-              <p className="text-2xl font-bold text-emerald-400">{stats.totalAmount.toLocaleString()} 코인</p>
+              <p className="text-2xl font-bold text-emerald-400">{Math.floor(stats.totalMilliAmount/1000).toLocaleString()} Gold</p>
             </div>
             <div
               className="p-5 rounded-2xl text-center"
@@ -183,7 +193,7 @@ export default function CoinLogsPage() {
               }}
             >
               <p className="text-xs text-purple-400/70 mb-1">오늘 지급량</p>
-              <p className="text-2xl font-bold text-purple-400">{stats.todayAmount.toLocaleString()} 코인</p>
+              <p className="text-2xl font-bold text-purple-400">{Math.floor(stats.todayMilliAmount/1000).toLocaleString()} Gold</p>
             </div>
           </div>
         )}
@@ -249,10 +259,10 @@ export default function CoinLogsPage() {
                     <th className="px-4 py-3 text-left text-gray-400 font-medium">지급일시</th>
                     <th className="px-4 py-3 text-left text-gray-400 font-medium">지급자</th>
                     <th className="px-4 py-3 text-left text-gray-400 font-medium">수령자</th>
-                    <th className="px-4 py-3 text-right text-gray-400 font-medium">금액</th>
+                    <th className="px-4 py-3 text-right text-gray-400 font-medium">금액(Gold)</th>
                     <th className="px-4 py-3 text-left text-gray-400 font-medium">사유</th>
-                    <th className="px-4 py-3 text-right text-gray-400 font-medium">지급 전</th>
-                    <th className="px-4 py-3 text-right text-gray-400 font-medium">지급 후</th>
+                    <th className="px-4 py-3 text-right text-gray-400 font-medium">지급 전(Gold)</th>
+                    <th className="px-4 py-3 text-right text-gray-400 font-medium">지급 후(Gold)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -273,16 +283,16 @@ export default function CoinLogsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <span className="text-green-400 font-semibold">+{log.amount.toLocaleString()}</span>
+                        <span className="text-green-400 font-semibold">+{Math.floor(log.milliAmount/1000).toLocaleString()}</span>
                       </td>
                       <td className="px-4 py-3 text-gray-300 max-w-[200px] truncate" title={log.reason}>
                         {log.reason}
                       </td>
                       <td className="px-4 py-3 text-right text-gray-500">
-                        {log.previousBalance.toLocaleString()}
+                        {Math.floor(log.previousMilliGold/1000).toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-right text-[#D4AF37] font-medium">
-                        {log.newBalance.toLocaleString()}
+                        {Math.floor(log.newMilliGold/1000).toLocaleString()}
                       </td>
                     </tr>
                   ))}

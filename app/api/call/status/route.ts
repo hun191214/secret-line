@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
             select: {
               id: true,
               email: true,
-              coins: true,
+              milliGold: true,
             },
           },
           counselor: {
@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
               id: true,
               email: true,
               name: true,
-              coins: true,
+              milliGold: true,
             },
           },
         },
@@ -116,28 +116,26 @@ export async function GET(request: NextRequest) {
 
     // 4-1. 현재 사용자의 최신 코인 잔액 조회 (실시간 반영)
     // ★★★ 매번 DB에서 최신 값을 조회하여 스케줄러 차감 결과가 즉시 반영되도록 함 ★★★
-    let userCoins = 0;
+    let userMilliGold = 0;
     try {
       const currentUser = await prisma.user.findUnique({
         where: { email: userEmail },
-        select: { coins: true },
+        select: { milliGold: true },
       });
-      userCoins = currentUser?.coins ?? 0;
-      // 통화 상태가 ACTIVE일 때만 잔액 로그 출력 (과도한 로그 방지)
+      userMilliGold = currentUser?.milliGold ?? 0;
       if (call.status === 'ACTIVE') {
-        console.log(`💰 [통화 상태] 사용자 ${userEmail} 최신 잔액: ${userCoins}코인`);
+        console.log(`💰 [통화 상태] 사용자 ${userEmail} 최신 잔액: ${userMilliGold} milliGold`);
       }
     } catch (userError: any) {
       console.error(`[통화 상태] 사용자 잔액 조회 오류: ${userError?.message}`);
-      // 잔액 조회 실패 시 통화의 caller 정보 사용 (fallback)
       if (call.caller.email === userEmail) {
-        userCoins = call.caller.coins ?? 0;
+        userMilliGold = call.caller.milliGold ?? 0;
       }
     }
 
     // 5. 선물 총액 집계 (Settlement에서 COUNSELOR 타입만 집계)
     // ★★★ metadata 필드가 없으므로 상담사 수익의 역산으로 원본 선물 금액 계산 ★★★
-    let totalGifts = 0;
+    let totalMilliGifts = 0;
     try {
       // aggregate로 상담사 수익 합계 조회
       const amountSumResult = await prisma.settlement.aggregate({
@@ -151,15 +149,12 @@ export async function GET(request: NextRequest) {
         },
       });
 
-      const counselorAmountSum = amountSumResult._sum.amount || 0;
-
-      // 상담사 수익(60%)에서 원본 선물 금액 역산
-      // 원본 선물 금액 = 상담사 수익 / 0.6
-      if (counselorAmountSum > 0) {
-        totalGifts = Math.round(counselorAmountSum / COUNSELOR_RATE);
+      const counselorMilliAmountSum = amountSumResult._sum.amount || 0;
+      if (counselorMilliAmountSum > 0) {
+        totalMilliGifts = Math.round(counselorMilliAmountSum / COUNSELOR_RATE);
       }
 
-      console.log(`🎁 [통화 상태] 통화 ${callId} - 상담사 수익 합계: ${counselorAmountSum}코인, 역산 선물 총액: ${totalGifts}코인`);
+      console.log(`🎁 [통화 상태] 통화 ${callId} - 상담사 수익 합계: ${counselorMilliAmountSum} milliGold, 역산 선물 총액: ${totalMilliGifts} milliGold`);
     } catch (giftError: any) {
       console.error(`[통화 상태] 선물 집계 오류: ${giftError?.message}`);
       // 집계 실패해도 계속 진행 (totalGifts는 0으로 유지)
@@ -178,10 +173,10 @@ export async function GET(request: NextRequest) {
           name: call.counselor.name || call.counselor.email?.split('@')[0] || '상담사',
         },
         statusMessage: getStatusMessage(call.status),
-        totalGifts: totalGifts, // 실시간 집계된 선물 총액 (역산)
+        totalMilliGifts: totalMilliGifts, // 실시간 집계된 선물 총액 (역산)
       },
       user: {
-        coins: userCoins, // 실시간 코인 잔액 (서버 스케줄러로 차감된 최신 값)
+        milliGold: userMilliGold, // 실시간 milliGold 잔액 (서버 스케줄러로 차감된 최신 값)
       },
     }, { headers: noCacheHeaders });
 

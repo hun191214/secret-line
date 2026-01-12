@@ -77,7 +77,7 @@ export async function GET() {
         where: { email: userEmail },
         select: {
           id: true,
-          coins: true,
+          milliGold: true,
         },
       });
     } catch (dbError: any) {
@@ -87,7 +87,7 @@ export async function GET() {
         consultationEarnings: 0,
         giftEarnings: 0,
         totalTodayEarnings: 0,
-        totalCoins: 0,
+        totalMilliGold: 0,
         source: 'error',
       }, { headers: noCacheHeaders });
     }
@@ -109,7 +109,7 @@ export async function GET() {
     // ★★★ 15초 미만 통화는 과금되지 않으므로 수익 계산에서 제외 ★★★
     const MIN_BILLING_SECONDS = 15; // 최소 과금 시간 (초)
     
-    let consultationEarnings = 0;
+    let consultationMilliEarnings = 0;
     try {
       const todayCalls = await prisma.call.findMany({
         where: {
@@ -132,31 +132,28 @@ export async function GET() {
 
       // 상담 수익 계산: 분당 14코인, 60% 배분
       // ★★★ cost > 0인 통화만 계산 (15초 미만 통화는 cost = 0) ★★★
-      consultationEarnings = todayCalls.reduce((sum, call) => {
-        // cost가 0이면 과금되지 않은 통화 (15초 미만)이므로 제외
+      consultationMilliEarnings = todayCalls.reduce((sum, call) => {
         if (!call.cost || call.cost === 0) {
           return sum;
         }
-        
-        // duration이 15초 미만이면 제외 (이중 체크)
         const durationSeconds = call.duration || 0;
         if (durationSeconds < MIN_BILLING_SECONDS) {
           return sum;
         }
-        
         const durationMinutes = Math.ceil(durationSeconds / 60);
-        const earnings = Math.floor(durationMinutes * 14 * 0.6); // 14코인/분 * 60%
+        // 1분당 14 Gold → 14,000 milliGold, 60% 분배
+        const earnings = Math.floor(durationMinutes * 14000 * 0.6);
         return sum + earnings;
       }, 0);
 
-      console.log(`📊 [상담사 통계] ${userEmail}: 상담 수익 ${consultationEarnings}코인 (${todayCalls.length}건, 15초 이상 통화만 계산)`);
+      console.log(`📊 [상담사 통계] ${userEmail}: 상담 수익 ${consultationMilliEarnings} milliGold (${todayCalls.length}건, 15초 이상 통화만 계산)`);
     } catch (dbError: any) {
       console.error(`[상담사 통계] 통화 조회 오류: ${dbError?.message}`);
     }
 
     // 2. 오늘 완료된 Settlement 중 COUNSELOR 타입에서 선물 수익 합산
     // ★★★ metadata 필드가 없으므로 상담사 수익의 역산으로 선물 금액 계산 ★★★
-    let giftEarnings = 0;
+    let giftMilliEarnings = 0;
     try {
       // 오늘 완료된 상담사 선물 Settlement 합계
       const giftSettlements = await prisma.settlement.aggregate({
@@ -174,32 +171,27 @@ export async function GET() {
         },
       });
 
-      const counselorGiftAmountSum = giftSettlements._sum.amount || 0;
-
-      // 상담사 수익(60%)에서 원본 선물 금액 역산
-      // 원본 선물 금액 = 상담사 수익 / 0.6
-      // 선물 수익은 상담사가 받은 60% 금액 (counselorGiftAmountSum)
-      giftEarnings = counselorGiftAmountSum;
-
-      console.log(`🎁 [상담사 통계] ${userEmail}: 선물 수익 ${giftEarnings}코인 (상담사가 받은 60% 금액)`);
+      const counselorGiftMilliSum = giftSettlements._sum.amount || 0;
+      // milliGold 단위 그대로 사용
+      giftMilliEarnings = counselorGiftMilliSum;
+      console.log(`🎁 [상담사 통계] ${userEmail}: 선물 수익 ${giftMilliEarnings} milliGold (상담사가 받은 60% 금액)`);
     } catch (giftError: any) {
       console.error(`[상담사 통계] 선물 수익 조회 오류: ${giftError?.message}`);
     }
 
     // 3. 총 오늘 수익 계산
-    const totalTodayEarnings = consultationEarnings + giftEarnings;
+    const totalTodayMilliEarnings = consultationMilliEarnings + giftMilliEarnings;
 
     // 4. DB 검증: 실제 코인 잔액 확인 (참고용)
-    const totalCoins = counselor.coins ?? 0;
-
-    console.log(`💰 [상담사 통계] ${userEmail}: 총 오늘 수익 ${totalTodayEarnings}코인 (상담: ${consultationEarnings}코인, 선물: ${giftEarnings}코인, 잔액: ${totalCoins}코인)`);
+    const totalMilliGold = counselor.milliGold ?? 0;
+    console.log(`💰 [상담사 통계] ${userEmail}: 총 오늘 수익 ${totalTodayMilliEarnings} milliGold (상담: ${consultationMilliEarnings} milliGold, 선물: ${giftMilliEarnings} milliGold, 잔액: ${totalMilliGold} milliGold)`);
 
     return NextResponse.json({
       success: true,
-      consultationEarnings,
-      giftEarnings,
-      totalTodayEarnings,
-      totalCoins,
+      consultationMilliEarnings,
+      giftMilliEarnings,
+      totalTodayMilliEarnings,
+      totalMilliGold,
       source: 'database',
     }, { headers: noCacheHeaders });
 

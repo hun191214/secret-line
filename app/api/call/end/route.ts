@@ -17,9 +17,9 @@ import { prisma, ensurePrismaConnected } from '@/lib/prisma';
  * ⚠️ 주의: Prisma 6.2.0 버전 유지 필수
  */
 
-const COST_PER_MINUTE = 14; // 1분당 14코인
-const COUNSELOR_EARNINGS_PER_MINUTE = 8; // 상담사 60% (정수)
-const PLATFORM_EARNINGS_PER_MINUTE = 6; // 플랫폼 40% (정수)
+const COST_PER_MINUTE_MILLI = 14000; // 1분당 14,000 milliGold (14 Gold)
+const COUNSELOR_EARNINGS_PER_MINUTE_MILLI = 8000; // 상담사 60% (8 Gold)
+const PLATFORM_EARNINGS_PER_MINUTE_MILLI = 6000; // 플랫폼 40% (6 Gold)
 const MIN_BILLING_SECONDS = 15; // 최소 과금 시간 (초)
 
 export async function POST(request: NextRequest) {
@@ -178,21 +178,21 @@ export async function POST(request: NextRequest) {
 
     // 8. 통화 비용 계산 (15초 이상인 경우만)
     const durationMinutes = Math.ceil(duration / 60); // 올림 (1초라도 1분으로 계산)
-    const totalCoinsToDeduct = durationMinutes * COST_PER_MINUTE;
-    const counselorEarnings = durationMinutes * COUNSELOR_EARNINGS_PER_MINUTE;
-    const platformEarnings = durationMinutes * PLATFORM_EARNINGS_PER_MINUTE;
+    const totalMilliGoldToDeduct = durationMinutes * COST_PER_MINUTE_MILLI;
+    const counselorMilliEarnings = durationMinutes * COUNSELOR_EARNINGS_PER_MINUTE_MILLI;
+    const platformMilliEarnings = durationMinutes * PLATFORM_EARNINGS_PER_MINUTE_MILLI;
     const costUSD = durationMinutes * 0.14;
 
     // 9. 이용자 잔액 확인
-    const callerCoins = call.caller.coins ?? 0;
-    const actualDeduction = Math.min(totalCoinsToDeduct, callerCoins); // 잔액보다 많으면 잔액만큼만 차감
+    const callerMilliGold = call.caller.milliGold ?? 0;
+    const actualMilliDeduction = Math.min(totalMilliGoldToDeduct, callerMilliGold); // 잔액보다 많으면 잔액만큼만 차감
 
     console.log(`💰 [과금] 통화 ${callId} 최종 정산:`);
     console.log(`   → 통화 시간: ${duration}초 (${durationMinutes}분)`);
-    console.log(`   → 이용자 잔액: ${callerCoins}코인`);
-    console.log(`   → 차감 예정: ${totalCoinsToDeduct}코인 (실제: ${actualDeduction}코인)`);
-    console.log(`   → 상담사 수익: ${counselorEarnings}코인 (60%)`);
-    console.log(`   → 플랫폼 수익: ${platformEarnings}코인 (40%)`);
+    console.log(`   → 이용자 잔액: ${callerMilliGold} milliGold`);
+    console.log(`   → 차감 예정: ${totalMilliGoldToDeduct} milliGold (실제: ${actualMilliDeduction} milliGold)`);
+    console.log(`   → 상담사 수익: ${counselorMilliEarnings} milliGold (60%)`);
+    console.log(`   → 플랫폼 수익: ${platformMilliEarnings} milliGold (40%)`);
 
     // 10. 트랜잭션으로 과금 및 종료 처리
     try {
@@ -201,8 +201,8 @@ export async function POST(request: NextRequest) {
         prisma.user.update({
           where: { id: call.callerId },
           data: {
-            coins: {
-              decrement: actualDeduction,
+            milliGold: {
+              decrement: actualMilliDeduction,
             },
           },
         }),
@@ -210,8 +210,8 @@ export async function POST(request: NextRequest) {
         prisma.user.update({
           where: { id: call.counselorId },
           data: {
-            coins: {
-              increment: counselorEarnings,
+            milliGold: {
+              increment: counselorMilliEarnings,
             },
           },
         }),
@@ -228,8 +228,8 @@ export async function POST(request: NextRequest) {
       ]);
 
       console.log(`✅ [통화 종료] 통화 ${callId} 과금 및 종료 완료`);
-      console.log(`   → 이용자 ${call.caller.email}: ${callerCoins} → ${callerCoins - actualDeduction}코인`);
-      console.log(`   → 상담사 ${call.counselor.email}: ${call.counselor.coins ?? 0} → ${(call.counselor.coins ?? 0) + counselorEarnings}코인`);
+      console.log(`   → 이용자 ${call.caller.email}: ${callerMilliGold} → ${callerMilliGold - actualMilliDeduction} milliGold`);
+      console.log(`   → 상담사 ${call.counselor.email}: ${call.counselor.milliGold ?? 0} → ${(call.counselor.milliGold ?? 0) + counselorMilliEarnings} milliGold`);
     } catch (txError: any) {
       console.error(`[통화 종료] 트랜잭션 오류: ${txError?.message}`);
       

@@ -67,25 +67,26 @@ export async function GET() {
       );
     }
 
-    // 5. DB에서 최신 코인 잔액 조회
+
+    // 5. DB에서 최신 milliGold 잔액 조회
     let user;
     try {
       user = await prisma.user.findUnique({
         where: { email: userEmail },
-        select: { coins: true, email: true },
+        select: { milliGold: true, email: true },
       });
     } catch (dbError: any) {
-      console.error(`[실전 로그] 사용자 이메일: ${userEmail} | 코인 조회 시도 중 서버 오류 - DB 조회 실패`);
+      console.error(`[실전 로그] 사용자 이메일: ${userEmail} | Gold 잔액 조회 시도 중 서버 오류 - DB 조회 실패`);
       console.error(`   → 오류 상세: ${dbError?.message}`);
       return NextResponse.json(
-        { success: false, message: '코인 잔액 조회 중 오류가 발생했습니다.' },
+        { success: false, message: 'Gold 잔액 조회 중 오류가 발생했습니다.' },
         { status: 500, headers: noCacheHeaders }
       );
     }
 
     // 6. 사용자 존재 여부 확인
     if (!user) {
-      console.error(`[실전 로그] 사용자 이메일: ${userEmail} | 코인 조회 시도 중 인증 실패 - DB에서 사용자를 찾을 수 없습니다.`);
+      console.error(`[실전 로그] 사용자 이메일: ${userEmail} | Gold 잔액 조회 시도 중 인증 실패 - DB에서 사용자를 찾을 수 없습니다.`);
       console.error(`   → 시도 시간: ${new Date().toISOString()}`);
       return NextResponse.json(
         { success: false, message: '사용자를 찾을 수 없습니다.' },
@@ -93,14 +94,13 @@ export async function GET() {
       );
     }
 
-    // 7. 코인 값 처리 (null이면 0으로)
-    const userCoins = user.coins ?? 0;
-    // console.log 제거 (JSON 응답 간섭 방지)
+    // 7. milliGold 값 처리 (null이면 0으로)
+    const userMilliGold = user.milliGold ?? 0;
 
     // 8. 세션 쿠키 업데이트 (동기화)
     cookieStore.set('auth_session', JSON.stringify({
       ...session,
-      coins: userCoins,
+      milliGold: userMilliGold,
     }), {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -112,7 +112,7 @@ export async function GET() {
     // 9. 성공 응답
     return NextResponse.json({
       success: true,
-      coins: userCoins,
+      milliGold: userMilliGold,
       email: user.email,
     }, { headers: noCacheHeaders });
 

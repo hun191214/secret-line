@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
         region: true,
         country: true,
         languages: true,
-        coins: true,
+        milliGold: true,
         createdAt: true,
         counselorProfile: {
           select: {
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
         region: c.region,
         country: c.counselorProfile?.country || c.country, // 프로필의 국가 우선
         languages: c.languages,
-        coins: c.coins,
+        milliGold: c.milliGold,
         createdAt: c.createdAt,
       })),
     });

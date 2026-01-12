@@ -17,7 +17,7 @@ import { prisma, ensurePrismaConnected } from '@/lib/prisma';
  * ⚠️ 주의: Settlement 테이블에 metadata 필드가 없으므로 사용하지 않음
  */
 
-const VALID_GIFT_AMOUNTS = [100, 500, 1000];
+const VALID_GIFT_MILLIAMOUNTS = [100000, 500000, 1000000]; // milliGold 단위: 100, 500, 1000 Gold
 
 // 배분 비율 (6:3:1 또는 6:4)
 const COUNSELOR_RATE = 0.6;  // 60%
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { callId, amount } = body || {};
+    const { callId, milliAmount } = body || {};
 
     // 2. 필수 파라미터 확인
     if (!callId) {
@@ -66,19 +66,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!amount || typeof amount !== 'number') {
-      console.error(`[선물] 에러: amount 누락 또는 잘못된 타입 - 받은 값: ${amount} (${typeof amount})`);
+    if (!milliAmount || typeof milliAmount !== 'number') {
+      console.error(`[선물] 에러: milliAmount 누락 또는 잘못된 타입 - 받은 값: ${milliAmount} (${typeof milliAmount})`);
       return NextResponse.json(
         { success: false, message: '선물 금액이 필요합니다.' },
         { status: 400, headers: noCacheHeaders }
       );
     }
 
-    // 3. 선물 금액 유효성 확인
-    if (!VALID_GIFT_AMOUNTS.includes(amount)) {
-      console.error(`[선물] 에러: 잘못된 선물 금액 - ${amount}코인`);
+    // 3. 선물 금액 유효성 확인 (milliGold)
+    if (!VALID_GIFT_MILLIAMOUNTS.includes(milliAmount)) {
+      console.error(`[선물] 에러: 잘못된 선물 금액 - ${milliAmount} milliGold`);
       return NextResponse.json(
-        { success: false, message: '유효하지 않은 선물 금액입니다. (100, 500, 1000 코인 중 선택)' },
+        { success: false, message: '유효하지 않은 선물 금액입니다. (100, 500, 1000 Gold 중 선택, milliGold 단위)' },
         { status: 400, headers: noCacheHeaders }
       );
     }
@@ -210,19 +210,19 @@ export async function POST(request: NextRequest) {
     }
 
     // 10. 잔액 확인
-    const callerCoins = call.caller.coins ?? 0;
-    if (callerCoins < amount) {
-      console.error(`[선물] 에러: 잔액 부족 - 현재: ${callerCoins}코인, 필요: ${amount}코인`);
+    const callerMilliGold = call.caller.milliGold ?? 0;
+    if (callerMilliGold < milliAmount) {
+      console.error(`[선물] 에러: 잔액 부족 - 현재: ${callerMilliGold} milliGold, 필요: ${milliAmount} milliGold`);
       return NextResponse.json(
-        { success: false, message: `잔액이 부족합니다. (현재: ${callerCoins}코인, 필요: ${amount}코인)` },
+        { success: false, message: `잔액이 부족합니다. (현재: ${callerMilliGold} milliGold, 필요: ${milliAmount} milliGold)` },
         { status: 400, headers: noCacheHeaders }
       );
     }
 
     // 11. 배분 계산 (6:3:1 또는 6:4)
-    const counselorAmount = Math.floor(amount * COUNSELOR_RATE);  // 60%
-    let platformAmount: number;
-    let referrerAmount = 0;
+    const counselorMilliAmount = Math.floor(milliAmount * COUNSELOR_RATE);  // 60%
+    let platformMilliAmount: number;
+    let referrerMilliAmount = 0;
     let referrerId: string | null = null;
 
     // 추천인 확인 - 더 엄격한 체크
@@ -234,11 +234,11 @@ export async function POST(request: NextRequest) {
     
     if (hasReferrer) {
       referrerId = call.referral!.referrerId;
-      referrerAmount = Math.floor(amount * REFERRER_RATE);  // 10%
-      platformAmount = Math.floor(amount * PLATFORM_RATE_WITH_REFERRER);  // 30%
+      referrerMilliAmount = Math.floor(milliAmount * REFERRER_RATE);  // 10%
+      platformMilliAmount = Math.floor(milliAmount * PLATFORM_RATE_WITH_REFERRER);  // 30%
       console.log(`🎁 [선물] 추천인 있음 - ID: ${referrerId} (6:3:1 배분)`);
     } else {
-      platformAmount = Math.floor(amount * PLATFORM_RATE_NO_REFERRER);  // 40%
+      platformMilliAmount = Math.floor(milliAmount * PLATFORM_RATE_NO_REFERRER);  // 40%
       console.log(`🎁 [선물] 추천인 없음 (6:4 배분)`);
     }
 
@@ -260,8 +260,8 @@ export async function POST(request: NextRequest) {
         prisma.user.update({
           where: { id: call.callerId },
           data: {
-            coins: {
-              decrement: amount,
+            milliGold: {
+              decrement: milliAmount,
             },
           },
         })
@@ -272,8 +272,8 @@ export async function POST(request: NextRequest) {
         prisma.user.update({
           where: { id: call.counselorId },
           data: {
-            coins: {
-              increment: counselorAmount,
+            milliGold: {
+              increment: counselorMilliAmount,
             },
           },
         })
@@ -285,40 +285,38 @@ export async function POST(request: NextRequest) {
           data: {
             userId: call.counselorId,
             callId: callId,
-            amount: counselorAmount,
+            amount: counselorMilliAmount,
             type: 'COUNSELOR',
             percentage: COUNSELOR_RATE,
             status: 'COMPLETED',
             settledAt: new Date(),
-            // metadata 필드 제거 - 테이블에 없음
           },
         })
       );
 
       // 12-4. 추천인이 있으면 추천인에게도 배분
-      if (hasReferrer && referrerId && referrerAmount > 0) {
+      if (hasReferrer && referrerId && referrerMilliAmount > 0) {
         transactions.push(
           prisma.user.update({
             where: { id: referrerId },
             data: {
-              coins: {
-                increment: referrerAmount,
+              milliGold: {
+                increment: referrerMilliAmount,
               },
             },
           })
         );
-        
+      
         transactions.push(
           prisma.settlement.create({
             data: {
               userId: referrerId,
               callId: callId,
-              amount: referrerAmount,
+              amount: referrerMilliAmount,
               type: 'REFERRER',
               percentage: REFERRER_RATE,
               status: 'COMPLETED',
               settledAt: new Date(),
-              // metadata 필드 제거
             },
           })
         );
@@ -330,12 +328,11 @@ export async function POST(request: NextRequest) {
           data: {
             userId: call.counselorId, // 플랫폼 수익은 상담사 ID를 참조 (시스템 정산용)
             callId: callId,
-            amount: platformAmount,
+            amount: platformMilliAmount,
             type: 'COMPANY',
             percentage: hasReferrer ? PLATFORM_RATE_WITH_REFERRER : PLATFORM_RATE_NO_REFERRER,
             status: 'COMPLETED',
             settledAt: new Date(),
-            // metadata 필드 제거
           },
         })
       );
@@ -344,11 +341,11 @@ export async function POST(request: NextRequest) {
       await prisma.$transaction(transactions);
 
       console.log(`✅ [선물] 완료!`);
-      console.log(`   → 발신자(${call.caller.email}): ${callerCoins} → ${callerCoins - amount}코인`);
-      console.log(`   → 상담사(${call.counselor.email}): ${call.counselor.coins ?? 0} → ${(call.counselor.coins ?? 0) + counselorAmount}코인`);
-      console.log(`   → 플랫폼 수익: ${platformAmount}코인`);
+      console.log(`   → 발신자(${call.caller.email}): ${callerMilliGold} → ${callerMilliGold - milliAmount} milliGold`);
+      console.log(`   → 상담사(${call.counselor.email}): ${call.counselor.milliGold ?? 0} → ${(call.counselor.milliGold ?? 0) + counselorMilliAmount} milliGold`);
+      console.log(`   → 플랫폼 수익: ${platformMilliAmount} milliGold`);
       if (hasReferrer && referrerId) {
-        console.log(`   → 추천인 수익: ${referrerAmount}코인`);
+        console.log(`   → 추천인 수익: ${referrerMilliAmount} milliGold`);
       }
 
     } catch (txError: any) {
@@ -376,16 +373,16 @@ export async function POST(request: NextRequest) {
     // 13. 성공 응답 (선물 알림 정보 포함)
     return NextResponse.json({
       success: true,
-      message: `${call.counselor.name || '상담사'}님에게 ${amount}코인을 선물했습니다!`,
+      message: `${call.counselor.name || '상담사'}님에게 ${milliAmount} milliGold를 선물했습니다!`,
       gift: {
-        amount,
+        milliAmount,
         from: call.caller.email || 'unknown',
         to: call.counselor.email || 'unknown',
-        remainingCoins: callerCoins - amount,
+        remainingMilliGold: callerMilliGold - milliAmount,
         distribution: {
-          counselor: counselorAmount,
-          platform: platformAmount,
-          referrer: referrerAmount,
+          counselor: counselorMilliAmount,
+          platform: platformMilliAmount,
+          referrer: referrerMilliAmount,
         },
       },
     }, { headers: noCacheHeaders });

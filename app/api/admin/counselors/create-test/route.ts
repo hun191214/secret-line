@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
             region: data.region,
             country: data.country,
             languages: data.languages,
-            coins: 0,
+            milliGold: 0,
           },
         });
 

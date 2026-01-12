@@ -68,8 +68,8 @@ export async function POST(request: NextRequest) {
 
     console.log(`🔔 [충전 요청] 사용자: ${userEmail}, 금액: ${usdtAmount} USDT`);
 
-    // 5. 환율 계산: 1 USDT = 100 Coins
-    const coinsToAdd = Math.floor(usdtAmount * 100);
+    // 5. 환율 계산: 1 USDT = 100,000 milliGold
+    const milliGoldToAdd = Math.floor(usdtAmount * 100000);
 
     // 6. DB 연결 확인
     const dbConnected = await ensurePrismaConnected();
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     try {
       currentUser = await prisma.user.findUnique({
         where: { email: userEmail },
-        select: { id: true, coins: true, email: true },
+        select: { id: true, milliGold: true, email: true },
       });
     } catch (dbError: any) {
       console.error(`[실전 로그] 사용자 이메일: ${userEmail} | 충전 시도 중 DB 조회 실패`);
@@ -105,22 +105,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const previousCoins = currentUser.coins ?? 0;
-    const newCoins = previousCoins + coinsToAdd;
+    const previousMilliGold = currentUser.milliGold ?? 0;
+    const newMilliGold = previousMilliGold + milliGoldToAdd;
 
     // 8. DB에 코인 잔액 업데이트 (영구 저장)
     let updatedUser;
     try {
       updatedUser = await prisma.user.update({
         where: { email: userEmail },
-        data: { coins: newCoins },
-        select: { id: true, coins: true, email: true },
+        data: { milliGold: newMilliGold },
+        select: { id: true, milliGold: true, email: true },
       });
     } catch (dbError: any) {
       console.error(`[실전 로그] 사용자 이메일: ${userEmail} | 충전 시도 중 DB 업데이트 실패`);
       console.error(`   → 오류 상세: ${dbError?.message}`);
       return NextResponse.json(
-        { success: false, message: '코인 충전 처리 중 오류가 발생했습니다.' },
+        { success: false, message: 'Gold 충전 처리 중 오류가 발생했습니다.' },
         { status: 500, headers: noCacheHeaders }
       );
     }
@@ -130,9 +130,9 @@ export async function POST(request: NextRequest) {
     try {
       verifiedUser = await prisma.user.findUnique({
         where: { email: userEmail },
-        select: { coins: true },
+        select: { milliGold: true },
       });
-      console.log(`[DB 확인] 저장된 최종 코인: ${verifiedUser?.coins ?? 0}`);
+      console.log(`[DB 확인] 저장된 최종 milliGold: ${verifiedUser?.milliGold ?? 0}`);
     } catch {
       console.warn(`[DB 확인] 검증 조회 실패 (충전은 성공했을 수 있음)`);
     }
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
     // 10. 세션 쿠키도 업데이트 (동기화)
     cookieStore.set('auth_session', JSON.stringify({
       ...session,
-      coins: updatedUser.coins,
+      milliGold: updatedUser.milliGold,
       lastDepositTime: Date.now(),
       lastDepositAmount: usdtAmount,
     }), {
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
       path: '/',
     });
 
-    console.log(`✅ [충전 완료] 사용자: ${userEmail}, ${previousCoins} → ${updatedUser.coins} 코인 (+${coinsToAdd})`);
+    console.log(`✅ [충전 완료] 사용자: ${userEmail}, ${previousMilliGold} → ${updatedUser.milliGold} milliGold (+${milliGoldToAdd})`);
 
     // 11. 성공 응답
     return NextResponse.json({
@@ -159,9 +159,9 @@ export async function POST(request: NextRequest) {
       message: '입금이 완료되었습니다.',
       data: {
         usdtAmount,
-        coinsAdded: coinsToAdd,
-        previousCoins,
-        newCoins: updatedUser.coins,
+        milliGoldAdded: milliGoldToAdd,
+        previousMilliGold,
+        newMilliGold: updatedUser.milliGold,
       },
     }, { headers: noCacheHeaders });
 

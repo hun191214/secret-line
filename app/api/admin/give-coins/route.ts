@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       select: {
         id: true,
         email: true,
-        coins: true,
+        milliGold: true,
       },
     });
 
@@ -74,20 +74,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const previousBalance = targetUser.coins;
+    const previousBalance = targetUser.milliGold;
     const newBalance = previousBalance + amount;
 
-    // 트랜잭션으로 코인 지급 및 로그 기록
+    // 트랜잭션으로 milliGold 지급 및 로그 기록
     try {
       const result = await prisma.$transaction(async (tx) => {
-        // 1. 사용자 코인 업데이트
+        // 1. 사용자 milliGold 업데이트
         const updatedUser = await tx.user.update({
           where: { id: targetUser.id },
-          data: { coins: newBalance },
-          select: { id: true, email: true, coins: true },
+          data: { milliGold: newBalance },
+          select: { id: true, email: true, milliGold: true },
         });
 
-        // 2. 코인 지급 로그 기록
+        // 2. milliGold 지급 로그 기록
         await tx.coinGrantLog.create({
           data: {
             userId: targetUser.id,
@@ -105,18 +105,18 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: '코인이 성공적으로 지급되었습니다.',
+        message: 'Gold가 성공적으로 지급되었습니다.',
         data: {
           email: result.email,
           previousBalance,
           amount,
-          newBalance: result.coins,
+          newBalance: result.milliGold,
         },
       });
     } catch (dbError: any) {
-      console.error('코인 지급 실패:', dbError);
+      console.error('Gold 지급 실패:', dbError);
       return NextResponse.json(
-        { success: false, message: '코인 지급 처리 중 오류가 발생했습니다.' },
+        { success: false, message: 'Gold 지급 처리 중 오류가 발생했습니다.' },
         { status: 500 }
       );
     }
