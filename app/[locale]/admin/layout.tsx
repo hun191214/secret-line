@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { ReactNode } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
