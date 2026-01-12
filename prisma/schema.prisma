@@ -20,7 +20,7 @@ model User {
   name        String?
   role        UserRole @default(MEMBER)
   gender      Gender?
-  coins       Int      @default(0) // 코인 잔액
+  milliGold   Int      @default(0) // 1/1000 Gold 단위 정수
   status      CounselorStatus? // 상담사 온라인 상태 (ONLINE/OFFLINE)
   
   // 중복 로그인 방지
@@ -82,7 +82,7 @@ enum CounselorStatus {
 model Payment {
   id              String        @id @default(cuid())
   userId          String
-  amount          Float         // 결제 금액 (USD)
+  milliAmount     Int           // 1/1000 Gold 단위 정수 (결제 금액)
   currency        String        @default("USD")
   paymentId       String        @unique // NOWPayments 결제 ID
   status          PaymentStatus @default(PENDING)
@@ -117,7 +117,7 @@ model Call {
   startedAt       DateTime?
   endedAt         DateTime?
   duration        Int?     @default(0) // 통화 시간 (초)
-  cost            Float?   // 통화 비용 (USD)
+  milliCost       Int?     // 1/1000 Gold 단위 정수 (통화 비용)
   agoraChannel    String?  // Agora 채널명
   agoraToken      String?  // Agora 토큰
   referralId      String?  // 추천인 ID (있을 경우)
@@ -154,7 +154,7 @@ model Referral {
   referredId      String   // 피추천인 (신규 회원)
   referralCode    String   @unique // 추천인 코드
   status          ReferralStatus @default(ACTIVE)
-  totalEarnings   Float    @default(0) // 총 수익
+  milliEarnings   Int      @default(0) // 1/1000 Gold 단위 정수 (총 수익)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -178,7 +178,7 @@ model Settlement {
   id              String   @id @default(cuid())
   userId          String   // 정산 대상자
   callId          String?  // 관련 통화 ID
-  amount          Float    // 정산 금액
+  milliGold       Int      // 1/1000 Gold 단위 정수 (정산 금액)
   type            SettlementType
   percentage      Float    // 배분 비율 (0.6, 0.1, 0.3, 0.4 등)
   status          SettlementStatus @default(PENDING)
@@ -262,8 +262,8 @@ model WithdrawalRequest {
   userId          String
   
   // 출금 정보 (USDT 전용)
-  coinAmount      Int      // 차감할 코인 수
-  usdtAmount      Float    // 정산 받을 USDT 금액
+  milliGold       Int      // 1/1000 Gold 단위 정수 (차감할 코인)
+  usdtAmount      Float    // 실제 지급되는 USDT 금액(실화폐, 정산용 아님)
   walletAddress   String   // USDT 지갑 주소
   network         String   // 네트워크 (TRC-20, ERC-20, BEP-20 등)
   
