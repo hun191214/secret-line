@@ -23,10 +23,10 @@ export const metadata: Metadata = {
     "전 세계 어디서나 진정한 감성 대화를 경험하세요. 당신의 마음을 이해하는 상담사가 기다리고 있습니다.",
 };
 
-type LocaleLayoutProps = {
+interface LocaleLayoutProps {
   children: React.ReactNode;
   params: { locale: string };
-};
+}
 
 export function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
@@ -36,21 +36,19 @@ export default async function LocaleLayout({
   children,
   params,
 }: LocaleLayoutProps) {
-  const locale = params.locale as Locale;
+  const { locale } = params;
 
-  // 유효하지 않은 locale이면 404
-  if (!locales.includes(locale)) {
+  if (!locales.includes(locale as Locale)) {
     notFound();
   }
 
-  // ✅ locale 기준으로 메시지 로드
   const messages = await getMessages({ locale });
 
   return (
     <html lang={locale}>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <SessionValidator />
-        <NextIntlClientProvider locale={locale} messages={messages}>
+        <NextIntlClientProvider messages={messages}>
           {children}
         </NextIntlClientProvider>
       </body>
