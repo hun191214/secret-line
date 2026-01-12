@@ -462,7 +462,7 @@ export default function MyPage() {
               {/* ★★★ 여성 MEMBER + 신청 완료(APPROVED): 대시보드 이동 버튼 ★★★ */}
               {user.role === 'MEMBER' && counselorProfileStatus === 'APPROVED' && (
                 <a
-                  href={`/${locale}/counselor/dashboard`}
+                  // href={`/${locale}/counselor/dashboard`}
                   className="block w-full py-4 px-4 rounded-lg font-bold text-white text-lg text-center transition-all transform hover:scale-[1.02] mb-3"
                   style={{
                     background: 'linear-gradient(135deg, #E8B4B8 0%, #9B59B6 100%)',
@@ -536,7 +536,7 @@ export default function MyPage() {
                   {/* 대시보드 버튼 (승인된 경우) */}
                   {counselorProfileStatus === 'APPROVED' && (
                     <a
-                      href={`/${locale}/counselor/dashboard`}
+                      // href={`/${locale}/counselor/dashboard`}
                       className="block w-full py-4 px-4 rounded-lg font-bold text-white text-lg text-center transition-all transform hover:scale-[1.02] mb-3"
                       style={{
                         background: 'linear-gradient(135deg, #E8B4B8 0%, #9B59B6 100%)',

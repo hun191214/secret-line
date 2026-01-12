@@ -112,7 +112,7 @@ export default function CounselorApplyPage() {
         setSuccess(data.message);
         setTimeout(() => {
           if (data.profile.status === 'APPROVED') {
-            router.push(`/${locale}/counselor/dashboard`);
+            // router.push(`/${locale}/counselor/dashboard`);
           } else {
             router.push(`/${locale}/mypage`);
           }

@@ -1,4 +1,5 @@
 export function generateStaticParams() {
+  // 오직 지원하는 locale 루트 페이지만 정적으로 생성
   return [
     { locale: 'ko' },
     { locale: 'en' },
@@ -36,9 +37,7 @@ type Props = {
   params: Promise<{ locale: string }>;
 };
 
-export function generateStaticParams() {
-  return locales.map((locale) => ({ locale }));
-}
+
 
 export default async function LocaleLayout({ children, params }: Props) {
   const { locale } = await params;

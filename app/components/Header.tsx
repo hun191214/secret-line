@@ -138,7 +138,7 @@ export default function Header() {
               {/* ★★★ 승인된 상담사만 대시보드 메뉴 표시 ★★★ */}
               {user.role === 'COUNSELOR' && counselorProfile?.status === 'APPROVED' && (
                 <a
-                  href={`/${locale}/counselor/dashboard`}
+                  // href={`/${locale}/counselor/dashboard`}
                   className="px-4 py-2 rounded-lg font-semibold text-black transition-all transform hover:scale-105"
                   style={{
                     backgroundColor: '#D4AF37',
