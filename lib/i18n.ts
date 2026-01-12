@@ -1,6 +1,5 @@
-// lib/i18n.ts
-export const locales = ["ko", "en"] as const;
+export const locales = ["en", "ko", "ja", "zh"] as const;
 
 export type Locale = (typeof locales)[number];
 
-export const defaultLocale: Locale = "ko";
+export const defaultLocale: Locale = "en";
