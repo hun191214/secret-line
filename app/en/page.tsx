@@ -1,13 +1,12 @@
-export default function Page() {
+export default function EnHome() {
   return (
-    <main style={{ padding: 24 }}>
-      <h1>Secret-Line (EN)</h1>
-      <p>This is the English page.</p>
+    <main style={{ padding: 24, fontFamily: "system-ui" }}>
+      <h1 style={{ fontSize: 22, fontWeight: 800 }}>EN Home</h1>
+      <p style={{ marginTop: 8 }}>This page is /en.</p>
 
-      <div style={{ display: "flex", gap: 12 }}>
-        <a href="/">Root</a>
-        <a href="/admin">Admin</a>
-        <a href="/api/health">Health</a>
+      <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+        <a href="/">/ (Landing)</a>
+        <a href="/ko">/ko</a>
       </div>
     </main>
   );
