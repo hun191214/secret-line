@@ -1,0 +1,46 @@
+version: '3.9'
+services:
+  app:
+    build: .
+    container_name: secretline-app
+    restart: always
+    env_file:
+      - .env.production
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+      - redis
+    networks:
+      - backend
+  db:
+    image: postgres:15-alpine
+    container_name: secretline-db
+    restart: always
+    environment:
+      POSTGRES_USER: secretline
+      POSTGRES_PASSWORD: secretlinepw
+      POSTGRES_DB: secretline
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - backend
+  redis:
+    image: redis:7-alpine
+    container_name: secretline-redis
+    restart: always
+    ports:
+      - "6373:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+volumes:
+  db_data:
+  redis_data:
+networks:
+  backend:
+    driver: bridge

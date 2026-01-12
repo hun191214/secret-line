@@ -1,0 +1,12 @@
+
+
+prisma.config.js
+.vercel
+node_modules
+.next
+coverage
+.env
+.env.*
+.vscode
+*.log
+*.tsbuildinfo

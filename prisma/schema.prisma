@@ -1,0 +1,200 @@
+// 에이전시 보너스 집계 테이블
+model AgencyLedger {
+  id          String   @id @default(uuid())
+  agentId     String
+  agent       User     @relation(fields: [agentId], references: [id])
+  amount      Int
+  description String?
+  createdAt   DateTime @default(now())
+}
+// 1. 데이터베이스 연결 설정
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  directUrl = env("DIRECT_URL")
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 2. 유저 역할 및 왕관 등급 정의
+enum Role {
+  USER
+  COUNSELOR
+  ADMIN
+}
+
+enum CrownLevel {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+}
+
+// 3. 유저 테이블 (모든 정보의 핵심)
+model User {
+  id               String       @id @default(uuid())
+  nickname         String       @unique
+  role             Role         @default(USER)
+  goldBalance      Int          @default(0)      // 현재 잔액 (정수형)
+  accumulatedSpend Int          @default(0)      // 누적 소비액 (왕관 등급용)
+  crownLevel       CrownLevel   @default(BRONZE) // 현재 왕관 등급
+  
+  // 추천인 시스템 (누가 누구를 데려왔나?)
+  referrerId       String?
+  referrer         User?        @relation("UserReferral", fields: [referrerId], references: [id])
+  referees         User[]       @relation("UserReferral")
+
+  // 관계 설정 (통화, 음성쪽지, 거래내역)
+  callsMade        Call[]       @relation("Caller")
+  callsReceived    Call[]       @relation("Callee")
+  voiceMessages    VoiceMessage[]
+  transactions     Transaction[]
+
+  // 비밀 음성 갤러리 및 구매 내역
+  secretVoices     SecretVoice[]
+  contentPurchases ContentPurchase[]
+
+  isLiteMode       Boolean      @default(false)
+  payments         PaymentRecord[]
+  agencyLedgers    AgencyLedger[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+// --- 결제 관련 Enum/모델 (파일 맨 마지막에만 위치) ---
+
+// --- 결제 관련 Enum/모델 (파일 맨 마지막에만 위치) ---
+// --- 결제 관련 Enum/모델 (파일 맨 마지막에만 위치) ---
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  EXPIRED
+  REFUNDED
+}
+
+enum PaymentCurrency {
+  USDT
+  BTC
+  ETH
+  USD
+}
+
+model PaymentRecord {
+  id            String          @id @default(uuid())
+  userId        String
+  amount        Float
+  currency      PaymentCurrency
+  provider      String
+  providerTxId  String?         @unique
+  status        PaymentStatus   @default(PENDING)
+  estimatedGold Int
+  actualGold    Int?
+  transactionId String?
+  description   String?
+  createdAt     DateTime        @default(now())
+  completedAt   DateTime?
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// 4. 통화 기록 테이블
+model Call {
+  id          String   @id @default(uuid())
+  callerId    String
+  caller      User     @relation("Caller", fields: [callerId], references: [id])
+  calleeId    String
+  callee      User     @relation("Callee", fields: [calleeId], references: [id])
+  
+  startTime   DateTime @default(now())
+  endTime     DateTime?
+  durationSec Int      @default(0)
+  totalGold   Int      @default(0) // 유저가 낸 총 골드
+  
+  status      String   @default("COMPLETED") // CONNECTING, ONGOING, COMPLETED, FAILED
+}
+
+// 5. 비밀 음성 메시지 (비동기 수익)
+model VoiceMessage {
+  id          String   @id @default(uuid())
+  counselorId String
+  counselor   User     @relation(fields: [counselorId], references: [id])
+  
+  fileUrl     String
+  price       Int      @default(50) // 기본 50골드
+  createdAt   DateTime @default(now())
+}
+
+
+// 6. 거래 장부 (돈이 흐른 기록)
+model Transaction {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  
+  amount    Int      // 보너스는 +, 지불은 -
+  type      String   // CALL(통화), GIFT(선물), VOICE(음성), REFERRAL(추천), CHARGE(충전)
+  details   String?  // "A님 추천 보너스" 등 설명
+  
+  createdAt DateTime @default(now())
+}
+
+
+// 7. 실시간 통화 세션 예약/진행 테이블
+model CallSession {
+  id               String    @id
+  callerId         String
+  receiverId       String
+  status           String    // RESERVED, ACTIVE, COMPLETED, CANCELLED
+  reservedAmount   Int
+  startedAt        DateTime  @default(now())
+  expiresAt        DateTime
+  actualStartedAt  DateTime?
+  endedAt          DateTime?
+}
+
+// 8. 비밀 음성 갤러리 및 구매 내역
+model SecretVoice {
+  id            String   @id @default(uuid())
+  creatorId     String
+  title         String
+  description   String?
+  audioUrl      String
+  thumbnailUrl  String?
+  duration      Int
+  price         Int
+  category      String?
+  isActive      Boolean  @default(true)
+  viewCount     Int      @default(0)
+  purchaseCount Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  creator       User              @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  purchases     ContentPurchase[]
+
+  @@index([creatorId])
+  @@index([category])
+  @@index([createdAt])
+}
+
+model ContentPurchase {
+  id            String   @id @default(uuid())
+  contentId     String
+  userId        String
+  paidAmount    Int
+  creatorProfit Int
+  purchasedAt   DateTime @default(now())
+
+  content       SecretVoice @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([contentId, userId])
+  @@index([userId])
+  @@index([contentId])
+}
