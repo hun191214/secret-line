@@ -25,7 +25,7 @@ export const metadata: Metadata = {
 
 type Props = {
   children: React.ReactNode;
-  params: { locale: Locale };
+  params: Promise<{ locale: string }>;
 };
 
 export function generateStaticParams() {
@@ -33,13 +33,13 @@ export function generateStaticParams() {
 }
 
 export default async function LocaleLayout({ children, params }: Props) {
-  const { locale } = params;
+  const { locale } = await params;
 
-  if (!locales.includes(locale)) {
+  if (!locales.includes(locale as Locale)) {
     notFound();
   }
 
-  const messages = await getMessages({ locale });
+  const messages = await getMessages();
 
   return (
     <html lang={locale}>

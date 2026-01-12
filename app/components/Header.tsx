@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { locales, localeNames, localeFlags, type Locale } from '@/lib/i18n';
+import { locales, type Locale } from '@/lib/i18n';
 
 interface User {
   email: string;
@@ -99,8 +99,8 @@ export default function Header() {
               onClick={() => setShowLangMenu(!showLangMenu)}
               className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors flex items-center gap-2"
             >
-              <span>{localeFlags[locale as Locale] || '🌐'}</span>
-              <span className="hidden sm:inline">{localeNames[locale as Locale] || locale}</span>
+              <span>{'🌐'}</span>
+              <span className="hidden sm:inline">{locale}</span>
               <span className="text-xs">▼</span>
             </button>
             
@@ -114,8 +114,8 @@ export default function Header() {
                       loc === locale ? 'bg-white/5 text-[#D4AF37]' : 'text-white'
                     } ${loc === locales[0] ? 'rounded-t-lg' : ''} ${loc === locales[locales.length - 1] ? 'rounded-b-lg' : ''}`}
                   >
-                    <span>{localeFlags[loc]}</span>
-                    <span>{localeNames[loc]}</span>
+                    <span>{'🌐'}</span>
+                    <span>{loc}</span>
                   </button>
                 ))}
               </div>
