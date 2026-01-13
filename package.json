@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate",
+    "postinstall": "prisma generate || true",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
@@ -21,6 +21,7 @@
     "next": "16.1.1",
     "next-intl": "^4.7.0",
     "node-cron": "^4.2.1",
+    "prisma": "6.2.0",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
@@ -33,7 +34,6 @@
     "@types/react-dom": "^18",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
-    "prisma": "6.2.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
