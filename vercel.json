@@ -1,0 +1,8 @@
+{
+  "ignoreCommand": "echo 'Ignore backend folders'",
+  "functions": {
+    "api/**.js": {
+      "includeFiles": "api/**"
+    }
+  }
+}
