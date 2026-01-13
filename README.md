@@ -1,3 +1,5 @@
+\ No newline at end of file
+Triggering fresh deploy
 🚨 [경고] Prisma 버전을 절대로 7.0.0 이상으로 올리지 마십시오. (P1012 파싱 에러 및 시스템 마비 위험)
 
 # Secret Line - 익명 음성 상담 플랫폼
