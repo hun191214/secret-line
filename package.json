@@ -14,7 +14,6 @@
     "db:push": "prisma db push"
   },
   "dependencies": {
-    // ...existing code...
     "@prisma/client": "6.2.0",
     "agora-access-token": "^2.0.4",
     "agora-token": "^2.0.5",
