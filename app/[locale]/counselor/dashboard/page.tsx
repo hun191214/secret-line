@@ -21,9 +21,15 @@ export default async function MinimalPage({ params }: Props) {
   const messages = await getMessages();
   const { user, todaySettlement, todayCallDuration } = await getDashboardStats();
 
-  // milliGold → Gold 변환
-  const accumulatedGold = Math.floor(user.milliGold / 1000);
-  const todayGold = Math.floor(todaySettlement / 1000);
+
+  // milliGold → Gold 변환 (정밀, 소수점 3자리, 오차 방지)
+  function formatGold(milliGold: number): string {
+    // 1 Gold = 1000 milliGold
+    // toFixed(3)로 소수점 3자리, BigInt는 필요 없으나 오차 방지 위해 곱셈 후 나눗셈
+    const gold = Math.round((milliGold * 1000) / 1000) / 1000;
+    return gold.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+  }
+
   // 통화 시간 변환 (시:분:초)
   function formatDuration(sec: number) {
     const h = Math.floor(sec / 3600);
@@ -38,22 +44,22 @@ export default async function MinimalPage({ params }: Props) {
         <h1 className="text-4xl md:text-5xl font-extrabold mb-12 text-center tracking-tight" style={{color:'#D4AF37', textShadow:'0 2px 24px #000, 0 0 8px #D4AF37'}}>Counselor Dashboard</h1>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-5xl">
           {/* 누적 수익 카드 */}
-          <div className="backdrop-blur-lg bg-white/5 border border-[#D4AF37] rounded-3xl shadow-xl p-8 flex flex-col items-center" style={{boxShadow:'0 0 32px #0008'}}>
-            <div className="text-5xl mb-4" style={{color:'#D4AF37'}}>💰</div>
-            <div className="text-3xl font-bold mb-2" style={{color:'#D4AF37'}}>{accumulatedGold.toLocaleString()} Gold</div>
-            <div className="text-gray-300 text-lg font-medium">누적 수익</div>
+          <div className="backdrop-blur-lg bg-[#0A0B10] border border-[#D4AF37] rounded-3xl shadow-xl p-8 flex flex-col items-center" style={{boxShadow:'0 0 32px #D4AF37, 0 0 16px #fff2'}}>
+            <div className="text-5xl mb-4" style={{color:'#D4AF37', textShadow:'0 0 16px #D4AF37, 0 0 8px #fff8'}}>💰</div>
+            <div className="text-3xl font-bold mb-2" style={{color:'#D4AF37', textShadow:'0 0 12px #D4AF37, 0 0 4px #fff8'}}>{formatGold(user.milliGold)} Gold</div>
+            <div className="text-[#D4AF37] text-lg font-medium" style={{textShadow:'0 0 8px #D4AF37'}}>누적 수익</div>
           </div>
           {/* 오늘의 수익 카드 */}
-          <div className="backdrop-blur-lg bg-white/5 border border-[#D4AF37] rounded-3xl shadow-xl p-8 flex flex-col items-center" style={{boxShadow:'0 0 32px #0008'}}>
-            <div className="text-5xl mb-4" style={{color:'#D4AF37'}}>📈</div>
-            <div className="text-3xl font-bold mb-2" style={{color:'#D4AF37'}}>{todayGold.toLocaleString()} Gold</div>
-            <div className="text-gray-300 text-lg font-medium">오늘의 수익</div>
+          <div className="backdrop-blur-lg bg-[#0A0B10] border border-[#D4AF37] rounded-3xl shadow-xl p-8 flex flex-col items-center" style={{boxShadow:'0 0 32px #D4AF37, 0 0 16px #fff2'}}>
+            <div className="text-5xl mb-4" style={{color:'#D4AF37', textShadow:'0 0 16px #D4AF37, 0 0 8px #fff8'}}>📈</div>
+            <div className="text-3xl font-bold mb-2" style={{color:'#D4AF37', textShadow:'0 0 12px #D4AF37, 0 0 4px #fff8'}}>{formatGold(todaySettlement)} Gold</div>
+            <div className="text-[#D4AF37] text-lg font-medium" style={{textShadow:'0 0 8px #D4AF37'}}>오늘의 수익</div>
           </div>
           {/* 통화 시간 카드 */}
-          <div className="backdrop-blur-lg bg-white/5 border border-[#D4AF37] rounded-3xl shadow-xl p-8 flex flex-col items-center" style={{boxShadow:'0 0 32px #0008'}}>
-            <div className="text-5xl mb-4" style={{color:'#D4AF37'}}>⏱️</div>
+          <div className="backdrop-blur-lg bg-[#0A0B10] border border-[#D4AF37] rounded-3xl shadow-xl p-8 flex flex-col items-center" style={{boxShadow:'0 0 32px #D4AF37, 0 0 16px #fff2'}}>
+            <div className="text-5xl mb-4" style={{color:'#D4AF37', textShadow:'0 0 16px #D4AF37, 0 0 8px #fff8'}}>⏱️</div>
             <div className="text-3xl font-bold mb-2" style={{color:'#D4AF37'}}>{formatDuration(todayCallDuration)}</div>
-            <div className="text-gray-300 text-lg font-medium">오늘의 통화 시간</div>
+            <div className="text-[#D4AF37] text-lg font-medium" style={{textShadow:'0 0 8px #D4AF37'}}>오늘의 통화 시간</div>
           </div>
         </div>
       </div>
