@@ -1,4 +1,0 @@
-{
-  "ignoreCommand": "echo 'Ignore backend folders'"
-  // Vercel: api 폴더를 함수로 인식하지 않도록 functions 설정 제거
-}
